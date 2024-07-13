@@ -1,113 +1,132 @@
-import Image from "next/image";
+"use client"
+import UserCard from '@/components/userCard';
+import { UserButton, useUser, useAuth } from '@clerk/nextjs';
+import { useEffect, useState } from 'react'
+import { useToast } from "@/components/ui/use-toast"
+import { Button } from '@/components/ui/button';
+import Navbar from '@/components/navbar';
+
+interface User{
+  id: string;
+  username: string; 
+  firstName: string;
+  lastName: string;
+  email: string;
+}
 
 export default function Home() {
+  const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [latestMessage, setLatestMessage] = useState<string | null>(null);
+  const [receivedMessages, setReceivedMessages] = useState<string[]>([]);
+  const [connectedUsers, setConnectedUsers] = useState<Array<{ id: string, username: string }>>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { user } = useUser();
+  const { getToken } = useAuth();
+  const { toast } = useToast()
+
+  useEffect(() => {
+    async function connectWebSocket() {
+      if (!user) return;
+
+      const token = await getToken();
+      const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
+      const newSocket = new WebSocket(`${WS_URL}?token=${token}`);
+
+      newSocket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        toast({
+          variant: "destructive",
+          title: "Connection Error",
+          description: "Failed to connect to the server. Please try again later.",
+        });
+      };
+
+      newSocket.onopen = () => {
+        console.log('Connection established');
+      }
+
+      newSocket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'message') {
+          setReceivedMessages(prev => [...prev, data.content]);
+          setLatestMessage(data.content);
+          toast({
+            className: 'text-green-500 text-2xl p-4',
+            description: data.content,
+          });
+        } else if (data.type === 'userList') {
+          setConnectedUsers(data.users);
+        } else if (data.type === 'userData') {
+          setCurrentUser(data.user);
+        }
+      }
+
+      newSocket.onclose = () => {
+        console.log('Connection closed. Attempting to reconnect...');
+        setTimeout(connectWebSocket, 5000);
+      };
+
+      setSocket(newSocket);
+      return () => newSocket.close();
+    }
+
+    connectWebSocket();
+  }, [user, getToken, toast])
+
+  const handlePing = (targetUser: string) => {
+    if (socket && currentUser) {
+      socket.send(JSON.stringify({
+        type: 'ping',
+        from: currentUser.id,
+        to: targetUser
+      }));
+    }
+  }
+
+  const handlePingAll = () => {
+    if (socket && currentUser) {
+      socket.send(JSON.stringify({
+        type: 'pingAll',
+        from: currentUser.id
+      }));
+    }
+  };
+
+  if (!socket || !currentUser) {
+    return (
+      <div className='flex flex-col items-center justify-center h-screen'>
+        <div>Connecting to server...</div>
+      </div>
+    )
+  }
+
+  const otherConnectedUsers = connectedUsers.filter(user => user.id !== currentUser.id);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <>
+      <div className='flex flex-col items-center h-screen bg-black/90 gap-4'>
+        <Navbar userName={currentUser.username || 'Unknown'} />
+        <div className='mt-4 flex gap-4'>
+          {otherConnectedUsers.length === 0 ? (
+            <p className="text-white">No other users connected.</p>
+          ) : (
+            otherConnectedUsers.map((user) => (
+              <UserCard
+                key={user.id}
+                userName={user.username || 'Unknown'}
+                onPing={() => handlePing(user.id)}
+              />
+            ))
+          )}
         </div>
+        <Button
+          className='bg-red-500 rounded-xl text-white'
+          variant='ghost'
+          onClick={handlePingAll}
+        >
+          Send ping to all
+        </Button>
       </div>
-
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  );
+    </>
+  )
 }
