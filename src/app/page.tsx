@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react'
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/navbar';
+import { motion } from 'framer-motion';
+import LoadingScreen from '@/components/loadingScreen';
 
 interface User {
   id: string;
@@ -85,9 +87,7 @@ export default function Home() {
 
   if (!socket || !currentUser) {
     return (
-      <div className='flex flex-col items-center justify-center h-screen'>
-        <div>Connecting to server...</div>
-      </div>
+      <LoadingScreen />
     )
   }
 
@@ -95,12 +95,18 @@ export default function Home() {
 
   return (
     <>
-      <div className='flex flex-col items-center min-h-screen bg-black/90 p-4'>
+      <div className='flex flex-col items-center min-h-screen bg-black/90'>
         <Navbar userName={currentUser.username || 'Unknown'} />
 
-        <div className='w-full max-w-4xl mt-4 flex flex-col items-center'>
+        <div className='w-full max-w-4xl mt-16 flex flex-col items-center '>
           {!otherConnectedUsers.length ? (
-            <div className="text-white">No other users connected.</div>
+            <motion.div className="text-white"
+              initial={{ opacity: 0, y: 100, scale: 0.5 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.5, ease: 'easeInOut' }}
+            >
+              No other users connected.
+            </motion.div>
           ) : (
             <>
               <div className='flex flex-wrap justify-center gap-4 mb-4'>
@@ -112,13 +118,20 @@ export default function Home() {
                   />
                 ))}
               </div>
-              <Button
-                className='bg-red-500 rounded-xl text-white'
-                variant='ghost'
-                onClick={handlePingAll}
+              <motion.div
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6, ease: 'easeInOut' }}
               >
-                Send ping to all
-              </Button>
+                <Button
+                  className='bg-red-500 rounded-xl text-white'
+                  variant='ghost'
+                  onClick={handlePingAll}
+                >
+                  Send ping to all
+                </Button>
+              </motion.div>
+
             </>
           )}
         </div>
