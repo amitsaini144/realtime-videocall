@@ -95,28 +95,33 @@ export default function Home() {
 
   return (
     <>
-      <div className='flex flex-col items-center h-screen bg-black/90 gap-4'>
+      <div className='flex flex-col items-center min-h-screen bg-black/90 p-4'>
         <Navbar userName={currentUser.username || 'Unknown'} />
-        <div className='mt-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
-          {otherConnectedUsers.length === 0 ? (
-            <p className="text-white">No other users connected.</p>
+
+        <div className='w-full max-w-4xl mt-4 flex flex-col items-center'>
+          {!otherConnectedUsers.length ? (
+            <div className="text-white">No other users connected.</div>
           ) : (
-            otherConnectedUsers.map((user) => (
-              <UserCard
-                key={user.id}
-                userName={user.username || 'Unknown'}
-                onPing={() => handlePing(user.id)}
-              />
-            ))
+            <>
+              <div className='flex flex-wrap justify-center gap-4 mb-4'>
+                {otherConnectedUsers.map((user) => (
+                  <UserCard
+                    key={user.id}
+                    userName={user.username || 'Unknown'}
+                    onPing={() => handlePing(user.id)}
+                  />
+                ))}
+              </div>
+              <Button
+                className='bg-red-500 rounded-xl text-white'
+                variant='ghost'
+                onClick={handlePingAll}
+              >
+                Send ping to all
+              </Button>
+            </>
           )}
         </div>
-        <Button
-          className='bg-red-500 rounded-xl text-white'
-          variant='ghost'
-          onClick={handlePingAll}
-        >
-          Send ping to all
-        </Button>
       </div>
     </>
   )
