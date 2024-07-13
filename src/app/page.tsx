@@ -6,9 +6,9 @@ import { useToast } from "@/components/ui/use-toast"
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/navbar';
 
-interface User{
+interface User {
   id: string;
-  username: string; 
+  username: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -31,15 +31,6 @@ export default function Home() {
       const token = await getToken();
       const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
       const newSocket = new WebSocket(`${WS_URL}?token=${token}`);
-
-      newSocket.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        toast({
-          variant: "destructive",
-          title: "Connection Error",
-          description: "Failed to connect to the server. Please try again later.",
-        });
-      };
 
       newSocket.onopen = () => {
         console.log('Connection established');
@@ -106,7 +97,7 @@ export default function Home() {
     <>
       <div className='flex flex-col items-center h-screen bg-black/90 gap-4'>
         <Navbar userName={currentUser.username || 'Unknown'} />
-        <div className='mt-4 flex gap-4'>
+        <div className='mt-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
           {otherConnectedUsers.length === 0 ? (
             <p className="text-white">No other users connected.</p>
           ) : (
