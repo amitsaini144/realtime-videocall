@@ -1,6 +1,6 @@
 "use client"
 import UserCard from '@/components/userCard';
-import { UserButton, useUser, useAuth } from '@clerk/nextjs';
+import { useUser, useAuth } from '@clerk/nextjs';
 import { useEffect, useState } from 'react'
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from '@/components/ui/button';
@@ -44,7 +44,7 @@ export default function Home() {
           setReceivedMessages(prev => [...prev, data.content]);
           setLatestMessage(data.content);
           toast({
-            className: 'text-green-500 text-2xl p-4',
+            className: 'text-green-500 text-4xl p-3',
             description: data.content,
           });
         } else if (data.type === 'userList') {
@@ -66,13 +66,21 @@ export default function Home() {
     connectWebSocket();
   }, [user, getToken, toast])
 
-  const handlePing = (targetUser: string) => {
+  const handlePing = (targetUser: string, targetUserName: string) => {
     if (socket && currentUser) {
       socket.send(JSON.stringify({
         type: 'ping',
         from: currentUser.id,
         to: targetUser
       }));
+      toast({
+        className: 'text-4xl p-3',
+        description: (
+          <span>  
+            Ping sent to <span className="text-green-500">{targetUserName}</span>
+          </span>
+        ),
+      });
     }
   }
 
@@ -82,6 +90,14 @@ export default function Home() {
         type: 'pingAll',
         from: currentUser.id
       }));
+      toast({
+        className: 'text-4xl p-3',
+        description: (
+          <span>
+            Ping sent to <span className="text-green-500">all users</span>
+          </span>
+        ),
+      });
     }
   };
 
@@ -96,9 +112,11 @@ export default function Home() {
   return (
     <>
       <div className='flex flex-col min-h-screen bg-black/90'>
-        <Navbar userName={currentUser.username || 'Unknown'} />
+        <div>
+          <Navbar userName={currentUser.username || 'Unknown'} />
+        </div>
 
-        <div className='flex-grow w-full max-w-4xl mx-auto mt-20 px-4 flex flex-col items-center'>
+        <div className='w-full max-w-4xl mx-auto mt-20 px-4 flex flex-col items-center'>
           {!otherConnectedUsers.length ? (
             <motion.div className="text-white"
               initial={{ opacity: 0, y: 100, scale: 0.5 }}
@@ -114,7 +132,7 @@ export default function Home() {
                   <UserCard
                     key={user.id}
                     userName={user.username || 'Unknown'}
-                    onPing={() => handlePing(user.id)}
+                    onPing={() => handlePing(user.id, user.username || 'Unknown')}
                   />
                 ))}
               </div>
