@@ -95,10 +95,10 @@ export default function Home() {
 
   return (
     <>
-      <div className='flex flex-col items-center min-h-screen bg-black/90'>
+      <div className='flex flex-col min-h-screen bg-black/90'>
         <Navbar userName={currentUser.username || 'Unknown'} />
 
-        <div className='w-full max-w-4xl mt-16 flex flex-col items-center '>
+        <div className='flex-grow w-full max-w-4xl mx-auto mt-20 px-4 flex flex-col items-center'>
           {!otherConnectedUsers.length ? (
             <motion.div className="text-white"
               initial={{ opacity: 0, y: 100, scale: 0.5 }}
@@ -119,9 +119,9 @@ export default function Home() {
                 ))}
               </div>
               <motion.div
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.6, ease: 'easeInOut' }}
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.6, ease: 'easeInOut' }}
               >
                 <Button
                   className='bg-red-500 rounded-xl text-white'
@@ -131,7 +131,6 @@ export default function Home() {
                   Send ping to all
                 </Button>
               </motion.div>
-
             </>
           )}
         </div>
