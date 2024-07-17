@@ -18,8 +18,8 @@ interface User {
 
 export default function Home() {
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [latestMessage, setLatestMessage] = useState<string | null>(null);
   const [receivedMessages, setReceivedMessages] = useState<string[]>([]);
+  const [messageInput, setMessageInput] = useState('');
   const [connectedUsers, setConnectedUsers] = useState<Array<{ id: string, username: string }>>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const { user } = useUser();
@@ -42,15 +42,15 @@ export default function Home() {
         const data = JSON.parse(event.data);
         if (data.type === 'message') {
           setReceivedMessages(prev => [...prev, data.content]);
-          setLatestMessage(data.content);
-          toast({
-            className: 'text-green-500 text-4xl p-3',
-            description: data.content,
-          });
         } else if (data.type === 'userList') {
           setConnectedUsers(data.users);
         } else if (data.type === 'userData') {
           setCurrentUser(data.user);
+        } else if (data.type === 'ping' || data.type === 'pingAll') {
+          toast({
+            className: 'text-green-500 text-4xl p-3',
+            description: data.content,
+          });
         }
       }
 
@@ -76,7 +76,7 @@ export default function Home() {
       toast({
         className: 'text-4xl p-3',
         description: (
-          <span>  
+          <span>
             Ping sent to <span className="text-green-500">{targetUserName}</span>
           </span>
         ),
@@ -98,6 +98,16 @@ export default function Home() {
           </span>
         ),
       });
+    }
+  };
+
+  const handleSendMessage = () => {
+    if (socket && currentUser && messageInput.trim()) {
+      socket.send(JSON.stringify({
+        type: 'message',
+        content: messageInput.trim(),
+      }));
+      setMessageInput('');
     }
   };
 
@@ -139,7 +149,7 @@ export default function Home() {
               <motion.div
                 initial={{ opacity: 0, scale: 0.5 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.6, ease: 'easeInOut' }}
+                transition={{ duration: 0.5 }}
               >
                 <Button
                   className='bg-red-500 rounded-xl text-white'
@@ -151,7 +161,41 @@ export default function Home() {
               </motion.div>
             </>
           )}
+          <div className='w-full mt-8 mb-20 overflow-y-auto max-h-96'>
+              {receivedMessages.map((message, index) => (
+                <div key={index} className='mb-2 text-white'>
+                  {message}
+                </div>
+              ))}
+            </div>
         </div>
+
+        {otherConnectedUsers.length > 0 && (
+          <motion.div className='w-full py-4 fixed bottom-0 left-0'
+            initial={{ opacity: 0, y: 100, scale: 0.5 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            
+            <div className='max-w-4xl mx-auto px-4 flex items-center'>
+              <input
+                className='flex-grow mr-2 p-2 rounded-xl focus:outline-none'
+                placeholder='Say hi to everyone'
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+              />
+              <Button
+                className='whitespace-nowrap bg-red-500 text-white rounded-xl'
+                variant='ghost'
+                onClick={handleSendMessage}
+              >
+                Send
+              </Button>
+            </div>
+          </motion.div>
+        )}
+
       </div>
     </>
   )

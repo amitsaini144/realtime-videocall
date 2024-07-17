@@ -76,7 +76,7 @@ wss.on("connection", async function connection(ws, req) {
       if (targetUser && targetUser.readyState === WebSocket.OPEN) {
         targetUser.send(
           JSON.stringify({
-            type: "message",
+            type: "ping",
             content: `${user.username} pinged you!`,
           })
         );
@@ -86,7 +86,7 @@ wss.on("connection", async function connection(ws, req) {
         if (client.readyState === WebSocket.OPEN && client.userId !== userId) {
           client.send(
             JSON.stringify({
-              type: "message",
+              type: "pingAll",
               content: `${user.username} pinged everyone!`,
             })
           );
