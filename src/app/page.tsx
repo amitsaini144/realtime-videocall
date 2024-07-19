@@ -166,53 +166,56 @@ export default function Home() {
               No other users connected.
             </motion.div>
           ) : (
-            <>
-              <div className='flex flex-wrap justify-center gap-4 mb-4'>
-                {otherConnectedUsers.map((user) => (
-                  <UserCard
-                    key={user.id}
-                    userName={user.username || 'Unknown'}
-                    onPing={() => handlePing(user.id, user.username || 'Unknown')}
-                  />
-                ))}
-              </div>
-              <motion.div
-                initial={{ opacity: 0, scale: 0.5 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5 }}
-                className="mb-4"
-              >
-                <Button
-                  className='bg-red-500 rounded-xl text-white'
-                  variant='ghost'
-                  onClick={handlePingAll}
-                >
-                  Send ping to all
-                </Button>
-              </motion.div>
-
-              <MessageSection messagesEndRef={messagesEndRef} recivedMessages={receivedMessages} currentUser={currentUser} />
-
-              <motion.div className='w-full py-4'
-                initial={{ opacity: 0, y: 100, scale: 0.5 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.5 }}
-              >
-                <div className='max-w-4xl mx-auto flex items-center'>
-                  <input
-                    className='flex-grow mr-2 p-2 rounded-xl focus:outline-none'
-                    placeholder='Say hi to everyone'
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                    maxLength={100}
-                  />
-                  <Button className='whitespace-nowrap bg-red-500 text-white rounded-xl' variant='ghost' onClick={handleSendMessage}>
-                    Send
-                  </Button>
+            <div className='w-full flex flex-col justify-between h-full min-h-screen'>
+              <div className='flex flex-col items-center justify-center '>
+                <div className='flex flex-wrap justify-center gap-4 mb-4'>
+                  {otherConnectedUsers.map((user) => (
+                    <UserCard
+                      key={user.id}
+                      userName={user.username || 'Unknown'}
+                      onPing={() => handlePing(user.id, user.username || 'Unknown')}
+                    />
+                  ))}
                 </div>
-              </motion.div>
-            </>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.5 }}
+                  className="mb-4"
+                >
+                  <Button
+                    className='bg-red-500 rounded-xl text-white'
+                    variant='ghost'
+                    onClick={handlePingAll}
+                  >
+                    Send ping to all
+                  </Button>
+                </motion.div>
+              </div>
+
+              <div className='w-full'>
+                <MessageSection messagesEndRef={messagesEndRef} recivedMessages={receivedMessages} currentUser={currentUser} />
+                <motion.div className='w-full py-4'
+                  initial={{ opacity: 0, y: 100, scale: 0.5 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <div className='max-w-4xl mx-auto flex items-center'>
+                    <input
+                      className='flex-grow mr-2 p-2 rounded-xl focus:outline-none'
+                      placeholder='Say hi to everyone'
+                      value={messageInput}
+                      onChange={(e) => setMessageInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                      maxLength={100}
+                    />
+                    <Button className='whitespace-nowrap bg-red-500 text-white rounded-xl' variant='ghost' onClick={handleSendMessage}>
+                      Send
+                    </Button>
+                  </div>
+                </motion.div>
+              </div>
+            </div>
           )}
         </div>
       </div>
