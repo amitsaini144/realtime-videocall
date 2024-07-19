@@ -158,7 +158,7 @@ export default function Home() {
 
         <div className='w-full max-w-4xl mx-auto mt-20 px-4 flex flex-col items-center justify-center flex-grow'>
           {!otherConnectedUsers.length ? (
-            <motion.div className="text-white"
+            <motion.div className="text-white text-xl md:text-base"
               initial={{ opacity: 0, y: 100, scale: 0.5 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.5, ease: 'easeInOut' }}

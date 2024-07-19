@@ -9,7 +9,7 @@ interface Message {
 
 export default function MessageSection({ recivedMessages, messagesEndRef, currentUser }: Message) {
     return (
-        <div className='w-full flex flex-col h-[350px]'>
+        <div className='w-full flex flex-col h-[450px] md:h-[350px]'>
             <div className='flex-grow overflow-y-auto mb-4 bg-gray-800 rounded-xl p-4 scroll-smooth'>
                 {recivedMessages.map((message, index) => {
                     const isCurrentUser = message.sender === currentUser.username;
