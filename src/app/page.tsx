@@ -1,14 +1,15 @@
 "use client"
 import UserCard from '@/components/userCard';
 import { useUser, useAuth } from '@clerk/nextjs';
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/navbar';
 import { motion } from 'framer-motion';
 import LoadingScreen from '@/components/loadingScreen';
+import MessageSection from '@/components/messageSection';
 
-interface User {
+export interface User {
   id: string;
   username: string;
   firstName: string;
@@ -18,57 +19,88 @@ interface User {
 
 export default function Home() {
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [receivedMessages, setReceivedMessages] = useState<string[]>([]);
+  const [receivedMessages, setReceivedMessages] = useState<Array<{ content: string, sender: string }>>([]);
   const [messageInput, setMessageInput] = useState('');
   const [connectedUsers, setConnectedUsers] = useState<Array<{ id: string, username: string }>>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const { user } = useUser();
   const { getToken } = useAuth();
-  const { toast } = useToast()
+  const { toast } = useToast();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
 
   useEffect(() => {
-    async function connectWebSocket() {
-      if (!user) return;
+    scrollToBottom();
+  }, [receivedMessages, scrollToBottom]);
 
-      const token = await getToken();
-      const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
-      const newSocket = new WebSocket(`${WS_URL}?token=${token}`);
+  const connectWebSocket = useCallback(async () => {
+    if (!user) return;
 
-      newSocket.onopen = () => {
-        console.log('Connection established');
+    const token = await getToken();
+    const WS_URL = 'ws://localhost:8080/ws';
+    const ws = new WebSocket(`${WS_URL}?token=${token}`);
+
+    ws.onopen = () => {
+      console.log('Connection established');
+      setSocket(ws);
+      socketRef.current = ws;
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'message') {
+        setReceivedMessages(prev => [...prev, { content: data.content, sender: data.sender }]);
+      } else if (data.type === 'userList') {
+        setConnectedUsers(data.users);
+      } else if (data.type === 'userData') {
+        setCurrentUser(data.user);
+      } else if (data.type === 'ping' || data.type === 'pingAll') {
+        toast({
+          className: 'text-green-500 text-4xl p-3',
+          description: data.content,
+        });
       }
+    };
 
-      newSocket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'message') {
-          setReceivedMessages(prev => [...prev, data.content]);
-        } else if (data.type === 'userList') {
-          setConnectedUsers(data.users);
-        } else if (data.type === 'userData') {
-          setCurrentUser(data.user);
-        } else if (data.type === 'ping' || data.type === 'pingAll') {
-          toast({
-            className: 'text-green-500 text-4xl p-3',
-            description: data.content,
-          });
-        }
+    ws.onclose = (event) => {
+      console.log('Connection closed. Attempting to reconnect...', event.code, event.reason);
+      setSocket(null);
+      socketRef.current = null;
+      setTimeout(connectWebSocket, 5000);
+    };
+
+    ws.onerror = (error) => { console.error('WebSocket error:', error); };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
       }
+    };
+  }, [user, getToken, toast]);
 
-      newSocket.onclose = () => {
-        console.log('Connection closed. Attempting to reconnect...');
-        setTimeout(connectWebSocket, 5000);
-      };
+  useEffect(() => {
+    let cleanupFunction: (() => void) | undefined;
 
-      setSocket(newSocket);
-      return () => newSocket.close();
-    }
+    (async () => {
+      if (!socketRef.current) {
+        cleanupFunction = await connectWebSocket();
+      }
+    })();
 
-    connectWebSocket();
-  }, [user, getToken, toast])
+    return () => {
+      if (cleanupFunction) {
+        cleanupFunction();
+      }
+    };
+  }, [connectWebSocket]);
 
-  const handlePing = (targetUser: string, targetUserName: string) => {
-    if (socket && currentUser) {
-      socket.send(JSON.stringify({
+  const handlePing = useCallback((targetUser: string, targetUserName: string) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && currentUser) {
+      socketRef.current.send(JSON.stringify({
         type: 'ping',
         from: currentUser.id,
         to: targetUser
@@ -82,11 +114,11 @@ export default function Home() {
         ),
       });
     }
-  }
+  }, [currentUser, toast]);
 
-  const handlePingAll = () => {
-    if (socket && currentUser) {
-      socket.send(JSON.stringify({
+  const handlePingAll = useCallback(() => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && currentUser) {
+      socketRef.current.send(JSON.stringify({
         type: 'pingAll',
         from: currentUser.id
       }));
@@ -99,22 +131,22 @@ export default function Home() {
         ),
       });
     }
-  };
+  }, [currentUser, toast]);
 
-  const handleSendMessage = () => {
-    if (socket && currentUser && messageInput.trim()) {
-      socket.send(JSON.stringify({
+  const handleSendMessage = useCallback(() => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && currentUser && messageInput.trim()) {
+      const message = {
         type: 'message',
         content: messageInput.trim(),
-      }));
+        sender: currentUser.username
+      };
+      socketRef.current.send(JSON.stringify(message));
       setMessageInput('');
     }
-  };
+  }, [currentUser, messageInput]);
 
   if (!socket || !currentUser) {
-    return (
-      <LoadingScreen />
-    )
+    return <LoadingScreen />;
   }
 
   const otherConnectedUsers = connectedUsers.filter(user => user.id !== currentUser.id);
@@ -122,11 +154,9 @@ export default function Home() {
   return (
     <>
       <div className='flex flex-col min-h-screen bg-black/90'>
-        <div>
-          <Navbar userName={currentUser.username || 'Unknown'} />
-        </div>
+        <Navbar userName={currentUser.username || 'Unknown'} />
 
-        <div className='w-full max-w-4xl mx-auto mt-20 px-4 flex flex-col items-center'>
+        <div className='w-full max-w-4xl mx-auto mt-20 px-4 flex flex-col items-center flex-grow'>
           {!otherConnectedUsers.length ? (
             <motion.div className="text-white"
               initial={{ opacity: 0, y: 100, scale: 0.5 }}
@@ -150,6 +180,7 @@ export default function Home() {
                 initial={{ opacity: 0, scale: 0.5 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5 }}
+                className="mb-4"
               >
                 <Button
                   className='bg-red-500 rounded-xl text-white'
@@ -159,24 +190,18 @@ export default function Home() {
                   Send ping to all
                 </Button>
               </motion.div>
+
+              <MessageSection messagesEndRef={messagesEndRef} recivedMessages={receivedMessages} currentUser={currentUser} />
             </>
           )}
-          <div className='w-full mt-8 mb-20 overflow-y-auto max-h-96'>
-              {receivedMessages.map((message, index) => (
-                <div key={index} className='mb-2 text-white'>
-                  {message}
-                </div>
-              ))}
-            </div>
         </div>
 
         {otherConnectedUsers.length > 0 && (
-          <motion.div className='w-full py-4 fixed bottom-0 left-0'
+          <motion.div className='w-full py-4'
             initial={{ opacity: 0, y: 100, scale: 0.5 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.5 }}
           >
-            
             <div className='max-w-4xl mx-auto px-4 flex items-center'>
               <input
                 className='flex-grow mr-2 p-2 rounded-xl focus:outline-none'
@@ -184,18 +209,14 @@ export default function Home() {
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                maxLength={100}
               />
-              <Button
-                className='whitespace-nowrap bg-red-500 text-white rounded-xl'
-                variant='ghost'
-                onClick={handleSendMessage}
-              >
+              <Button className='whitespace-nowrap bg-red-500 text-white rounded-xl' variant='ghost' onClick={handleSendMessage}>
                 Send
               </Button>
             </div>
           </motion.div>
         )}
-
       </div>
     </>
   )

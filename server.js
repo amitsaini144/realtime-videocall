@@ -66,7 +66,8 @@ wss.on("connection", async function connection(ws, req) {
           client.send(
             JSON.stringify({
               type: "message",
-              content: `${user.username}: ${messageData.content}`,
+              content: messageData.content,
+              sender: user.username,
             })
           );
         }
