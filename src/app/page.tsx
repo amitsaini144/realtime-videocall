@@ -156,7 +156,7 @@ export default function Home() {
       <div className='flex flex-col min-h-screen bg-black/90'>
         <Navbar userName={currentUser.username || 'Unknown'} />
 
-        <div className='w-full max-w-4xl mx-auto mt-20 px-4 flex flex-col items-center flex-grow'>
+        <div className='w-full max-w-4xl mx-auto mt-20 px-4 flex flex-col items-center justify-center flex-grow'>
           {!otherConnectedUsers.length ? (
             <motion.div className="text-white"
               initial={{ opacity: 0, y: 100, scale: 0.5 }}
@@ -192,31 +192,29 @@ export default function Home() {
               </motion.div>
 
               <MessageSection messagesEndRef={messagesEndRef} recivedMessages={receivedMessages} currentUser={currentUser} />
+
+              <motion.div className='w-full py-4'
+                initial={{ opacity: 0, y: 100, scale: 0.5 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.5 }}
+              >
+                <div className='max-w-4xl mx-auto flex items-center'>
+                  <input
+                    className='flex-grow mr-2 p-2 rounded-xl focus:outline-none'
+                    placeholder='Say hi to everyone'
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                    maxLength={100}
+                  />
+                  <Button className='whitespace-nowrap bg-red-500 text-white rounded-xl' variant='ghost' onClick={handleSendMessage}>
+                    Send
+                  </Button>
+                </div>
+              </motion.div>
             </>
           )}
         </div>
-
-        {otherConnectedUsers.length > 0 && (
-          <motion.div className='w-full py-4'
-            initial={{ opacity: 0, y: 100, scale: 0.5 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.5 }}
-          >
-            <div className='max-w-4xl mx-auto px-4 flex items-center'>
-              <input
-                className='flex-grow mr-2 p-2 rounded-xl focus:outline-none'
-                placeholder='Say hi to everyone'
-                value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                maxLength={100}
-              />
-              <Button className='whitespace-nowrap bg-red-500 text-white rounded-xl' variant='ghost' onClick={handleSendMessage}>
-                Send
-              </Button>
-            </div>
-          </motion.div>
-        )}
       </div>
     </>
   )
