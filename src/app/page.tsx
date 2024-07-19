@@ -41,7 +41,7 @@ export default function Home() {
     if (!user) return;
 
     const token = await getToken();
-    const WS_URL = 'ws://localhost:8080/ws';
+    const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
     const ws = new WebSocket(`${WS_URL}?token=${token}`);
 
     ws.onopen = () => {
