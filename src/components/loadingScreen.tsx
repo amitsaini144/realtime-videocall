@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 
 const LoadingScreen = () => {
   return (
-    <div className='flex flex-col items-center justify-center h-screen bg-black/90 text-white'>
+    <div className='flex flex-col items-center justify-center h-screen bg-gradient-to-bl from-sky-600 via-sky-400 to-sky-200 text-white'>
       <div className="flex items-center">
         <span>Connecting to server</span>
         <div className="ml-1 flex">

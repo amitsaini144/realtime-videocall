@@ -153,14 +153,14 @@ export default function Home() {
 
   return (
     <>
-      <div className='flex flex-col min-h-screen bg-black/90'>
+      <div className='flex flex-col min-h-screen bg-gradient-to-bl from-sky-600 via-sky-400 to-sky-200'>
         <Navbar userName={currentUser.username || 'Unknown'} />
 
         <div className='w-full max-w-4xl mx-auto mt-20 px-4 flex flex-col items-center justify-center flex-grow'>
           {!otherConnectedUsers.length ? (
             <motion.div className="text-white text-xl md:text-base"
-              initial={{ opacity: 0, y: 100, scale: 0.5 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, ease: 'easeInOut' }}
             >
               No other users connected.
@@ -180,12 +180,12 @@ export default function Home() {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
+                  whileHover={{ scale: 1.02, transition: { duration: 0.1 } }}
                   transition={{ duration: 0.5 }}
                   className="mb-4"
                 >
                   <Button
-                    className='bg-red-500 rounded-xl text-white'
-                    variant='ghost'
+                    className='bg-[#03AED2] rounded-xl text-white hover:text-white/90 hover:bg-[#03AED2]/80 shadow-sm'
                     onClick={handlePingAll}
                   >
                     Send ping to all
@@ -209,7 +209,7 @@ export default function Home() {
                       onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                       maxLength={100}
                     />
-                    <Button className='whitespace-nowrap bg-red-500 text-white rounded-xl' variant='ghost' onClick={handleSendMessage}>
+                    <Button className='bg-[#03AED2] rounded-xl text-white hover:text-white/90 hover:bg-[#03AED2]/70 shadow-sm' variant='ghost' onClick={handleSendMessage}>
                       Send
                     </Button>
                   </div>

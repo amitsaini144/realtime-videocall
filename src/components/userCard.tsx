@@ -8,14 +8,19 @@ interface UserCardProps {
 
 export default function UserCard({ userName, onPing }: UserCardProps) {
   return (
-    <motion.div className="flex flex-col border-2 border-red-500 p-3 rounded-xl gap-3 w-48 items-center bg-white/90 shadow-lg"
+    <motion.div className="flex flex-col p-3 rounded-xl gap-3 w-48 items-center bg-white/90 shadow-lg"
       initial={{ opacity: 0, scale: 0.5 }}
       animate={{ opacity: 1, scale: 1 }}
-      whileHover={{ rotate: [0, 3, -3, 3, -3, 0], transition: { duration: 0.4 }, }}
-      transition={{ duration: 0.6,  }}
+      transition={{ duration: 0.6 }}
     >
       <h1>{userName}</h1>
-      <Button className="bg-red-500 px-3 py-1 rounded-xl w-full text-white hover:border-2 border-red-500" onClick={onPing} variant='ghost'>Ping</Button>
+      <motion.div className='w-full'
+        whileHover={{ scale: 1.01,}}
+        transition={{ duration: 0.1 }}
+        >
+        <Button className="bg-[#03AED2] px-3 py-1 rounded-xl w-full text-white hover:bg-[#03AED2]/80 hover:text-white" onClick={onPing}>Ping</Button>
+      </motion.div>
+
     </motion.div>
   )
 }
