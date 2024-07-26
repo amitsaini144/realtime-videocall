@@ -8,7 +8,7 @@ interface UserCardProps {
 
 export default function UserCard({ userName, onPing }: UserCardProps) {
   return (
-    <motion.div className="flex flex-col p-3 rounded-xl gap-3 w-48 items-center bg-white/90 shadow-lg"
+    <motion.div className="flex flex-col p-3 rounded-xl gap-3 w-48 items-center bg-white shadow-lg"
       initial={{ opacity: 0, scale: 0.5 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.6 }}
