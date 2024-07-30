@@ -34,7 +34,7 @@ const VideoCallComponent: React.FC<VideoCallComponentProps> = ({ inCall, localSt
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ duration: 0.3 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-sky-900 bg-opacity-50"
                 >
                     <div
                         ref={containerRef}
@@ -45,14 +45,14 @@ const VideoCallComponent: React.FC<VideoCallComponentProps> = ({ inCall, localSt
                                 ref={remoteVideoRef}
                                 autoPlay
                                 playsInline
-                                className="w-full h-full object-cover"
+                                className="w-full h-[90vh] md:h-full object-cover "
                             />
                             <video
                                 ref={localVideoRef}
                                 autoPlay
                                 playsInline
                                 muted
-                                className="absolute bottom-4 right-4 w-1/4 h-2/4 object-cover rounded-lg border-2 border-white"
+                                className="absolute bottom-4 right-4 w-1/4 h-2/5 md:w-1/5 object-cover rounded-lg border-2 border-white"
                             />
                             <button
                                 onClick={handleCallEnded}
