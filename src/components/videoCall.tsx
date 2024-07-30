@@ -38,7 +38,7 @@ const VideoCallComponent: React.FC<VideoCallComponentProps> = ({ inCall, localSt
                 >
                     <div
                         ref={containerRef}
-                        className="bg-white rounded-lg shadow-lg overflow-hidden md:w-full h-screen w-screen max-w-4xl mx-4"
+                        className="bg-white rounded-lg shadow-lg overflow-hidden w-full max-w-4xl mx-4"
                     >
                         <div className="relative aspect-video">
                             <video
@@ -52,7 +52,7 @@ const VideoCallComponent: React.FC<VideoCallComponentProps> = ({ inCall, localSt
                                 autoPlay
                                 playsInline
                                 muted
-                                className="absolute bottom-4 right-4 w-1/4 h-1/4 object-cover rounded-lg border-2 border-white"
+                                className="absolute bottom-4 right-4 w-1/4 h-3/4 object-cover rounded-lg border-2 border-white"
                             />
                             <button
                                 onClick={handleCallEnded}
