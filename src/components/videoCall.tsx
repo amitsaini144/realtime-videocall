@@ -38,7 +38,7 @@ const VideoCallComponent: React.FC<VideoCallComponentProps> = ({ inCall, localSt
                 >
                     <div
                         ref={containerRef}
-                        className="bg-white rounded-lg shadow-lg overflow-hidden w-full max-w-4xl mx-4"
+                        className="bg-white rounded-lg shadow-lg overflow-hidden md:w-full h-screen w-screen max-w-4xl mx-4"
                     >
                         <div className="relative aspect-video">
                             <video
