@@ -52,7 +52,7 @@ const VideoCallComponent: React.FC<VideoCallComponentProps> = ({ inCall, localSt
                                 autoPlay
                                 playsInline
                                 muted
-                                className="absolute bottom-4 right-4 w-1/4 h-3/4 object-cover rounded-lg border-2 border-white"
+                                className="absolute bottom-4 right-4 w-1/4 h-2/4 object-cover rounded-lg border-2 border-white"
                             />
                             <button
                                 onClick={handleCallEnded}

@@ -127,8 +127,8 @@ export default function Home() {
         </div>
         <VideoCallComponent
           inCall={inCall}
-          localStream={remoteStream}
-          remoteStream={localStream}
+          localStream={localStream}
+          remoteStream={remoteStream}
           handleCallEnded={handleCallEnded}
         />
       </div>
