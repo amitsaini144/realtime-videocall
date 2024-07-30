@@ -5,30 +5,36 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/navbar';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import LoadingScreen from '@/components/loadingScreen';
 import MessageSection from '@/components/messageSection';
 import MovingCloudsBackground from '@/components/MovingCloudsBg';
-
+import useVideoCall from '@/hooks/useVideoCall';
+import VideoCallComponent from '@/components/videoCall';
 export interface User {
   id: string;
   username: string;
-  firstName: string;
-  lastName: string;
-  email: string;
+  inCall: boolean;
 }
 
 export default function Home() {
-  const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [receivedMessages, setReceivedMessages] = useState<Array<{ content: string, sender: string }>>([]);
   const [messageInput, setMessageInput] = useState('');
-  const [connectedUsers, setConnectedUsers] = useState<Array<{ id: string, username: string }>>([]);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const { user } = useUser();
   const { getToken } = useAuth();
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const socketRef = useRef<WebSocket | null>(null);
+
+  const {
+    connectedUsers,
+    currentUser,
+    receivedMessages,
+    socketRef,
+    startCall,
+    handleCallEnded,
+    localStream,
+    remoteStream,
+    inCall
+  } = useVideoCall(user, getToken, toast);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -37,102 +43,6 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom();
   }, [receivedMessages, scrollToBottom]);
-
-  const connectWebSocket = useCallback(async () => {
-    if (!user) return;
-
-    const token = await getToken();
-    const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
-    const ws = new WebSocket(`${WS_URL}?token=${token}`);
-
-    ws.onopen = () => {
-      console.log('Connection established');
-      setSocket(ws);
-      socketRef.current = ws;
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'message') {
-        setReceivedMessages(prev => [...prev, { content: data.content, sender: data.sender }]);
-      } else if (data.type === 'userList') {
-        setConnectedUsers(data.users);
-      } else if (data.type === 'userData') {
-        setCurrentUser(data.user);
-      } else if (data.type === 'ping' || data.type === 'pingAll') {
-        toast({
-          className: 'text-green-500 text-4xl p-3',
-          description: data.content,
-        });
-      }
-    };
-
-    ws.onclose = (event) => {
-      console.log('Connection closed. Attempting to reconnect...', event.code, event.reason);
-      setSocket(null);
-      socketRef.current = null;
-      setTimeout(connectWebSocket, 5000);
-    };
-
-    ws.onerror = (error) => { console.error('WebSocket error:', error); };
-
-    return () => {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
-      }
-    };
-  }, [user, getToken, toast]);
-
-  useEffect(() => {
-    let cleanupFunction: (() => void) | undefined;
-
-    (async () => {
-      if (!socketRef.current) {
-        cleanupFunction = await connectWebSocket();
-      }
-    })();
-
-    return () => {
-      if (cleanupFunction) {
-        cleanupFunction();
-      }
-    };
-  }, [connectWebSocket]);
-
-  const handlePing = useCallback((targetUser: string, targetUserName: string) => {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && currentUser) {
-      socketRef.current.send(JSON.stringify({
-        type: 'ping',
-        from: currentUser.id,
-        to: targetUser
-      }));
-      toast({
-        className: 'text-4xl p-3',
-        description: (
-          <span>
-            Ping sent to <span className="text-green-500">{targetUserName}</span>
-          </span>
-        ),
-      });
-    }
-  }, [currentUser, toast]);
-
-  const handlePingAll = useCallback(() => {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && currentUser) {
-      socketRef.current.send(JSON.stringify({
-        type: 'pingAll',
-        from: currentUser.id
-      }));
-      toast({
-        className: 'text-4xl p-3',
-        description: (
-          <span>
-            Ping sent to <span className="text-green-500">all users</span>
-          </span>
-        ),
-      });
-    }
-  }, [currentUser, toast]);
 
   const handleSendMessage = useCallback(() => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && currentUser && messageInput.trim()) {
@@ -144,19 +54,19 @@ export default function Home() {
       socketRef.current.send(JSON.stringify(message));
       setMessageInput('');
     }
-  }, [currentUser, messageInput]);
+  }, [currentUser, messageInput, socketRef]);
 
-  if (!socket || !currentUser) {
+  if (!currentUser || !socketRef.current) {
     return (
-      <div>
+      <div className='relative flex flex-col min-h-screen bg-gradient-to-bl from-sky-600 via-sky-400 to-sky-200'>
         <MovingCloudsBackground />
         <LoadingScreen />
       </div>
-
     );
   }
 
   const otherConnectedUsers = connectedUsers.filter(user => user.id !== currentUser.id);
+
 
   return (
     <>
@@ -182,24 +92,11 @@ export default function Home() {
                       <UserCard
                         key={user.id}
                         userName={user.username || 'Unknown'}
-                        onPing={() => handlePing(user.id, user.username || 'Unknown')}
+                        onClick={() => startCall(user)}
                       />
                     ))}
                   </div>
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.5 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    whileHover={{ scale: 1.02, transition: { duration: 0.1 } }}
-                    transition={{ duration: 0.5 }}
-                    className="mb-4"
-                  >
-                    <Button
-                      className='bg-[#03AED2] rounded-xl text-white hover:text-white/90 hover:bg-[#03AED2]/80 shadow-sm'
-                      onClick={handlePingAll}
-                    >
-                      Send ping to all
-                    </Button>
-                  </motion.div>
+
                 </div>
 
                 <div className='w-full'>
@@ -228,6 +125,12 @@ export default function Home() {
             )}
           </div>
         </div>
+        <VideoCallComponent
+          inCall={inCall}
+          localStream={localStream}
+          remoteStream={remoteStream}
+          handleCallEnded={handleCallEnded}
+        />
       </div>
     </>
   )
