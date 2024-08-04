@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import { User } from "../app/page";
 import { UserResource } from "@clerk/types";
 
@@ -16,12 +16,23 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
     const startCall = useCallback(async (targetUser: User) => {
         if (inCall) return;
-
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                {
+                    urls: 'turn:your-turn-server.com:3478',
+                    username: 'your-username',
+                    credential: 'your-password'
+                }
+            ]
+        };
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             setLocalStream(stream);
 
-            const pc = new RTCPeerConnection();
+            const pc = new RTCPeerConnection(configuration);
 
             pc.onicecandidate = (event) => {
                 if (event.candidate && socketRef.current && targetUser) {
@@ -36,6 +47,12 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
             pc.ontrack = (event) => {
                 setRemoteStream(event.streams[0]);
             };
+
+            pc.oniceconnectionstatechange = () => {
+                if (pc.iceConnectionState === 'failed') {
+                    pc.restartIce();
+                }
+            }
 
             stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
@@ -99,6 +116,12 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
                         }));
                     });
 
+                pc.oniceconnectionstatechange = () => {
+                    if (pc.iceConnectionState === 'failed') {
+                        pc.restartIce();
+                    }
+                }
+
                 const incomingUser: User | null = connectedUsers.find(user => user.id === data.from) || null;
                 console.log('incoming user', incomingUser, connectedUsers);
                 setInCall(true);
@@ -113,9 +136,11 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
         peerConnectionRef.current?.setRemoteDescription(new RTCSessionDescription(data.answer));
     }, []);
 
-    const handleNewICECandidate = useCallback((data: { candidate: RTCIceCandidateInit }) => {
-        peerConnectionRef.current?.addIceCandidate(new RTCIceCandidate(data.candidate))
-            .catch(e => console.error('Error adding received ice candidate', e));
+    const handleNewICECandidate = useCallback((data: { candidate: RTCIceCandidateInit | null }) => {
+        if (data.candidate) {
+            peerConnectionRef.current?.addIceCandidate(new RTCIceCandidate(data.candidate))
+                .catch(e => console.error('Error adding received ice candidate', e));
+        }
     }, []);
 
     const handleCallEnded = useCallback(() => {
@@ -198,9 +223,21 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
     }, [user, getToken, isConnecting]);
 
+    const checkAndRestartIce = useCallback(() => {
+        if (peerConnectionRef.current && peerConnectionRef.current.iceConnectionState === 'failed') {
+            console.log('ICE connection failed. Restarting...');
+            peerConnectionRef.current.restartIce();
+        }
+
+    }, []);
+
+    useEffect(() => {
+        const interval = setInterval(checkAndRestartIce, 5000);
+        return () => clearInterval(interval);
+    }, [checkAndRestartIce]);
+
     useEffect(() => {
         connectWebSocket();
-
         return () => {
             socketRef.current?.close();
         };
