@@ -22,29 +22,29 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun3.l.google.com:19302' },
             { urls: 'stun:stun4.l.google.com:19302' },
-            // {
-            //     urls: "stun:stun.relay.metered.ca:80",
-            // },
-            // {
-            //     urls: "turn:global.relay.metered.ca:80",
-            //     username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-            //     credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-            // },
-            // {
-            //     urls: "turn:global.relay.metered.ca:80?transport=tcp",
-            //     username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-            //     credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-            // },
-            // {
-            //     urls: "turn:global.relay.metered.ca:443",
-            //     username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-            //     credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-            // },
-            // {
-            //     urls: "turns:global.relay.metered.ca:443?transport=tcp",
-            //     username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-            //     credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-            // },
+            {
+                urls: "stun:stun.relay.metered.ca:80",
+            },
+            {
+                urls: "turn:global.relay.metered.ca:80",
+                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
+            },
+            {
+                urls: "turn:global.relay.metered.ca:80?transport=tcp",
+                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
+            },
+            {
+                urls: "turn:global.relay.metered.ca:443",
+                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
+            },
+            {
+                urls: "turns:global.relay.metered.ca:443?transport=tcp",
+                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
+            },
         ],
         iceCandiatePoolSize: 10
     };
@@ -61,7 +61,6 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
     const handleNewICECandidate = useCallback((data: { candidate: RTCIceCandidateInit, from: string }) => {
         if (data.candidate) {
-            console.log('Received ICE candidate:', data.candidate);
             if (peerConnectionRef.current && remoteDescriptionSet.current) {
                 peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate))
                     .catch(e => console.error('Error adding received ice candidate', e));
@@ -89,30 +88,12 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
                 }
             };
             pc.oniceconnectionstatechange = () => {
-                console.log('ICE connection state:', pc.iceConnectionState);
-                if (pc.iceConnectionState === 'failed') {
-                    console.log('ICE connection failed. Attempting to restart ICE.');
-                    pc.restartIce();
-                } else if (pc.iceConnectionState === 'disconnected') {
-                    console.log('ICE connection disconnected. Monitoring for potential recovery...');
-                    pc.restartIce();
-                }
+                if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') { pc.restartIce(); }
             };
 
             pc.onconnectionstatechange = () => {
-                console.log('Connection state:', pc.connectionState);
-                if (pc.connectionState === 'failed') {
-                    console.log('Connection failed. Closing and recreating PeerConnection...');
-                    handleCallEnded();
-                }
+                if (pc.connectionState === 'failed') { handleCallEnded(); }
             };
-
-            pc.onicegatheringstatechange = () => {
-                console.log('ICE gathering state:', pc.iceGatheringState);
-                if (pc.iceGatheringState === 'complete') {
-                    console.log('ICE gathering completed');
-                }
-            }
 
             pc.ontrack = (event) => {
                 setRemoteStream(event.streams[0]);
@@ -142,7 +123,7 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
             peerConnectionRef.current = pc;
             setInCall(true);
-            console.log('PeerConnection', pc);
+
         } catch (error) {
             console.error('Error starting call:', error);
             toast({ description: 'Failed to start call' });
@@ -181,26 +162,14 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
                 };
 
                 pc.oniceconnectionstatechange = () => {
-                    console.log('ICE connection state:', pc.iceConnectionState);
-                    if (pc.iceConnectionState === 'failed') {
-                        console.log('ICE connection failed. Attempting to restart ICE.');
-                        pc.restartIce();
-                    } else if (pc.iceConnectionState === 'disconnected') {
-                        console.log('ICE connection disconnected. Monitoring for potential recovery...');
-                        pc.restartIce();
-                    }
+                    if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') { pc.restartIce(); }
                 };
 
                 pc.onconnectionstatechange = () => {
-                    console.log('Connection state:', pc.connectionState);
-                    if (pc.connectionState === 'failed') {
-                        console.log('Connection failed. Closing and recreating PeerConnection...');
-                        handleCallEnded();
-                    }
+                    if (pc.connectionState === 'failed') { handleCallEnded(); }
                 };
 
                 pc.onicegatheringstatechange = () => {
-                    console.log('ICE gathering state:', pc.iceGatheringState);
                 };
 
                 peerConnectionRef.current = pc;
@@ -233,7 +202,6 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
                     });
 
                 setInCall(true);
-                console.log('PeerConnection', pc);
             })
             .catch(error => {
                 console.error('Error accessing media devices.', error);
@@ -253,7 +221,6 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
     }, [addBufferedCandidates]);
 
     const handleCallEnded = useCallback(() => {
-        console.log('call ended');
         if (peerConnectionRef.current) {
             peerConnectionRef.current.close();
             peerConnectionRef.current = null;
@@ -264,7 +231,6 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
         setLocalStream(null);
         setRemoteStream(null);
-
         setInCall(false);
 
         toast({ description: 'Call ended' });
@@ -281,7 +247,6 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
             const ws = new WebSocket(`${WS_URL}?token=${token}`);
 
             ws.onopen = () => {
-                console.log('WebSocket connected');
                 socketRef.current = ws;
                 setIsConnecting(true);
             };
@@ -315,18 +280,15 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
             ws.onclose = () => {
                 setTimeout(connectWebSocket, 10000);
-                console.log('WebSocket closed. Attempting to reconnect...');
                 socketRef.current = null;
                 setIsConnecting(false);
             };
 
             ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
                 setIsConnecting(false);
             };
 
         } catch (error) {
-            console.error('Error connecting to WebSocket:', error);
             setIsConnecting(false);
         }
 
@@ -334,7 +296,6 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
     const checkAndRestartIce = useCallback(() => {
         if (peerConnectionRef.current && peerConnectionRef.current.iceConnectionState === 'failed') {
-            console.log('ICE connection failed. Restarting...');
             peerConnectionRef.current.restartIce();
         }
 
