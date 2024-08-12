@@ -15,37 +15,15 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
     const configuration = {
         iceServers: [
-            {
-                urls: "stun:stun.relay.metered.ca:80",
-            },
-            {
-                urls: "turn:global.relay.metered.ca:80",
-                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-            },
-            {
-                urls: "turn:global.relay.metered.ca:80?transport=tcp",
-                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-            },
-            {
-                urls: "turn:global.relay.metered.ca:443",
-                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-            },
-            {
-                urls: "turns:global.relay.metered.ca:443?transport=tcp",
-                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-            },
-        ],
+            { urls: 'stun:stun.l.google.com:19302' }
+          ]
     };
 
     const startCall = useCallback(async (targetUser: User) => {
         if (inCall) return;
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
             setLocalStream(stream);
             const pc = new RTCPeerConnection(configuration);
 
@@ -87,6 +65,7 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
             peerConnectionRef.current = pc;
             setInCall(true);
+            console.log('pc', pc);
         } catch (error) {
             console.error('Error starting call:', error);
             toast({ description: 'Failed to start call' });
@@ -98,14 +77,14 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
             socketRef.current?.send(JSON.stringify({ type: 'callBusy', to: data.from }));
             return;
         }
-        console.log('data', data.from);
+
         const confirmed = window.confirm(`Incoming call from ${data.from}. Accept?`);
         if (!confirmed) {
             socketRef.current?.send(JSON.stringify({ type: 'callRejected', to: data.from }));
             return;
         }
 
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
             .then(stream => {
                 setLocalStream(stream);
 
@@ -153,6 +132,7 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
                 const incomingUser: User | null = connectedUsers.find(user => user.id === data.from) || null;
                 console.log('incoming user', incomingUser, connectedUsers);
                 setInCall(true);
+                console.log('pc', pc);
             })
             .catch(error => {
                 console.error('Error accessing media devices.', error);
@@ -197,7 +177,7 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
         try {
             const token = await getToken();
-            const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
+            const WS_URL = 'ws://localhost:8080';
             const ws = new WebSocket(`${WS_URL}?token=${token}`);
 
             ws.onopen = () => {
