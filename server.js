@@ -102,6 +102,14 @@ function forwardMessage(messageData, ws) {
         from: ws.userId,
       })
     );
+  } else {
+    ws.send(
+      JSON.stringify({
+        type: "error",
+        content: "Target user not available",
+        originalMessage: messageData,
+      })
+    );
   }
 }
 
