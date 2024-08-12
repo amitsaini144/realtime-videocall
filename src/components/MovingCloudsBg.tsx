@@ -29,7 +29,7 @@ const MovingCloudsBackground = () => {
     return (
         <div className="fixed inset-0 pointer-events-none z-0">
             <div className="relative w-full h-full">
-                <Cloud delay={0} yPosition={10} size={1.2} />
+                <Cloud delay={0} yPosition={40} size={1.2} />
                 <Cloud delay={7} yPosition={30} size={0.8} />
                 <Cloud delay={14} yPosition={60} size={1} />
                 <Cloud delay={21} yPosition={90} size={0.9} />

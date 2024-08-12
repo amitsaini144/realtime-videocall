@@ -7,7 +7,7 @@ import cors from "cors";
 
 const app = express();
 app.use(cors());
-const port = process.env.PORT || 8080;
+const port = process.env.NEXT_PUBLIC_PORT || 8080;
 const httpServer = app.listen(port);
 
 const clerkClient = createClerkClient({
@@ -16,7 +16,6 @@ const clerkClient = createClerkClient({
 
 const wss = new WebSocketServer({ server: httpServer });
 let users = new Map();
-let activeVideoCalls = new Map();
 
 wss.on("connection", async function connection(ws, req) {
   const parameters = url.parse(req.url, true);
@@ -62,27 +61,18 @@ wss.on("connection", async function connection(ws, req) {
         handleChatMessage(messageData, user);
         break;
       case "videoCallOffer":
-        handleVideoCallOffer(messageData, ws);
-        break;
       case "videoCallAnswer":
-        handleVideoCallAnswer(messageData, ws);
-        break;
       case "iceCandidate":
-        handleIceCandidate(messageData, ws);
+        forwardMessage(messageData, ws);
+        break;
+      case "endCall":
+        handleEndCall(messageData, ws);
         break;
     }
   });
 
   ws.on("close", function () {
     users.delete(userId);
-    handleEndCall(
-      {
-        to: Array.from(activeVideoCalls.keys()).find(
-          (callerId) => callerId === userId
-        ),
-      },
-      user
-    );
     broadcastUserList();
   });
 
@@ -103,59 +93,22 @@ function handleChatMessage(messageData, user) {
   });
 }
 
-function handleVideoCallOffer(messageData, ws) {
+function forwardMessage(messageData, ws) {
   const targetUser = users.get(messageData.to);
   if (targetUser && targetUser.readyState === WebSocket.OPEN) {
-    if (activeVideoCalls.has(ws.id) || activeVideoCalls.has(messageData.to)) {
-      ws.send(JSON.stringify({ type: "callBusy" }));
-      return;
-    }
-    activeVideoCalls.set(ws.userId, messageData.to);
     targetUser.send(
       JSON.stringify({
-        type: "videoCallOffer",
-        offer: messageData.offer,
+        ...messageData,
         from: ws.userId,
       })
     );
   }
 }
 
-function handleVideoCallAnswer(messageData, ws) {
+function handleEndCall(messageData, ws) {
   const targetUser = users.get(messageData.to);
   if (targetUser && targetUser.readyState === WebSocket.OPEN) {
-    targetUser.send(
-      JSON.stringify({
-        type: "videoCallAnswer",
-        answer: messageData.answer,
-        from: ws.userId,
-      })
-    );
-  }
-}
-
-function handleIceCandidate(messageData, ws) {
-  const targetUser = users.get(messageData.to);
-  if (targetUser && targetUser.readyState === WebSocket.OPEN) {
-    targetUser.send(
-      JSON.stringify({
-        type: "iceCandidate",
-        candidate: messageData.candidate,
-        from: ws.userId,
-      })
-    );
-  }
-}
-
-function handleEndCall(messageData, user) {
-  const targetUserId = activeVideoCalls.get(user.id);
-  if (targetUserId) {
-    const targetUser = users.get(targetUserId);
-    if (targetUser && targetUser.readyState === WebSocket.OPEN) {
-      targetUser.send(JSON.stringify({ type: "endCall", from: user.id }));
-    }
-    activeVideoCalls.delete(user.id);
-    activeVideoCalls.delete(targetUserId);
+    targetUser.send(JSON.stringify({ type: "endCall", from: ws.userId }));
   }
 }
 
@@ -163,7 +116,6 @@ function broadcastUserList() {
   const userList = Array.from(users.entries()).map(([id, ws]) => ({
     id,
     username: ws.username,
-    inCall: activeVideoCalls.has(id),
   }));
   wss.clients.forEach(function each(client) {
     if (client.readyState === WebSocket.OPEN) {
