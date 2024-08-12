@@ -12,6 +12,8 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
     const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
     const socketRef = useRef<WebSocket | null>(null);
     const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+    const iceCandidateBuffer = useRef<RTCIceCandidateInit[]>([]);
+    const remoteDescriptionSet = useRef<boolean>(false);
 
     const configuration = {
         iceServers: [
@@ -20,38 +22,60 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun3.l.google.com:19302' },
             { urls: 'stun:stun4.l.google.com:19302' },
-            {
-                urls: "stun:stun.relay.metered.ca:80",
-            },
-            {
-                urls: "turn:global.relay.metered.ca:80",
-                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-            },
-            {
-                urls: "turn:global.relay.metered.ca:80?transport=tcp",
-                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-            },
-            {
-                urls: "turn:global.relay.metered.ca:443",
-                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-            },
-            {
-                urls: "turns:global.relay.metered.ca:443?transport=tcp",
-                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-            },
+            // {
+            //     urls: "stun:stun.relay.metered.ca:80",
+            // },
+            // {
+            //     urls: "turn:global.relay.metered.ca:80",
+            //     username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+            //     credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
+            // },
+            // {
+            //     urls: "turn:global.relay.metered.ca:80?transport=tcp",
+            //     username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+            //     credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
+            // },
+            // {
+            //     urls: "turn:global.relay.metered.ca:443",
+            //     username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+            //     credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
+            // },
+            // {
+            //     urls: "turns:global.relay.metered.ca:443?transport=tcp",
+            //     username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+            //     credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
+            // },
         ],
         iceCandiatePoolSize: 10
     };
+
+    const addBufferedCandidates = useCallback(() => {
+        if (peerConnectionRef.current && remoteDescriptionSet.current) {
+            iceCandidateBuffer.current.forEach(candidate => {
+                peerConnectionRef.current!.addIceCandidate(new RTCIceCandidate(candidate))
+                    .catch(e => console.error('Error adding buffered ice candidate', e));
+            });
+            iceCandidateBuffer.current = [];
+        }
+    }, []);
+
+    const handleNewICECandidate = useCallback((data: { candidate: RTCIceCandidateInit, from: string }) => {
+        if (data.candidate) {
+            console.log('Received ICE candidate:', data.candidate);
+            if (peerConnectionRef.current && remoteDescriptionSet.current) {
+                peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate))
+                    .catch(e => console.error('Error adding received ice candidate', e));
+            } else {
+                iceCandidateBuffer.current.push(data.candidate);
+            }
+        }
+    }, []);
 
     const startCall = useCallback(async (targetUser: User) => {
         if (inCall) return;
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             setLocalStream(stream);
             const pc = new RTCPeerConnection(configuration);
 
@@ -137,7 +161,7 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
             return;
         }
 
-        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then(stream => {
                 setLocalStream(stream);
 
@@ -183,7 +207,11 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
                 pc.setRemoteDescription(new RTCSessionDescription(data.offer))
-                    .then(() => pc.createAnswer())
+                    .then(() => {
+                        remoteDescriptionSet.current = true;
+                        addBufferedCandidates();
+                        return pc.createAnswer();
+                    })
                     .then(answer => pc.setLocalDescription(answer))
                     .then(async () => {
                         await new Promise<void>((resolve) => {
@@ -204,8 +232,6 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
                         }));
                     });
 
-                const incomingUser: User | null = connectedUsers.find(user => user.id === data.from) || null;
-                console.log('incoming user', incomingUser, connectedUsers);
                 setInCall(true);
                 console.log('PeerConnection', pc);
             })
@@ -213,19 +239,18 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
                 console.error('Error accessing media devices.', error);
                 toast({ description: 'Failed to access camera/microphone' });
             });
-    }, [inCall]);
-
-    const handleNewICECandidate = useCallback((data: { candidate: RTCIceCandidateInit | null }) => {
-        if (data.candidate) {
-            console.log('Received ICE candidate:', data.candidate);
-            peerConnectionRef.current?.addIceCandidate(new RTCIceCandidate(data.candidate))
-                .catch(e => console.error('Error adding received ice candidate', e));
-        }
-    }, []);
+    }, [inCall, addBufferedCandidates, toast]);
 
     const handleCallAccepted = useCallback((data: { answer: RTCSessionDescriptionInit }) => {
-        peerConnectionRef.current?.setRemoteDescription(new RTCSessionDescription(data.answer));
-    }, []);
+        if (peerConnectionRef.current) {
+            peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.answer))
+                .then(() => {
+                    remoteDescriptionSet.current = true;
+                    addBufferedCandidates();
+                })
+                .catch(e => console.error('Error setting remote description', e));
+        }
+    }, [addBufferedCandidates]);
 
     const handleCallEnded = useCallback(() => {
         console.log('call ended');
@@ -252,7 +277,7 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
         try {
             const token = await getToken();
-            const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
+            const WS_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL;
             const ws = new WebSocket(`${WS_URL}?token=${token}`);
 
             ws.onopen = () => {
