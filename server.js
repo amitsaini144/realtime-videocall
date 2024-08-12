@@ -100,6 +100,7 @@ function forwardMessage(messageData, ws) {
       JSON.stringify({
         ...messageData,
         from: ws.userId,
+        fromUsername: ws.username,
       })
     );
   } else {

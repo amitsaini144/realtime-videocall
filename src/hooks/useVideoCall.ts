@@ -130,13 +130,14 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
         }
     }, [inCall, toast]);
 
-    const handleIncomingCall = useCallback((data: { from: string, offer: RTCSessionDescriptionInit }) => {
+    const handleIncomingCall = useCallback((data: { from: string, fromUsername: string, offer: RTCSessionDescriptionInit }) => {
         if (inCall) {
             socketRef.current?.send(JSON.stringify({ type: 'callBusy', to: data.from }));
             return;
         }
+        console.log(data);
 
-        const confirmed = window.confirm(`Incoming call from ${data.from}. Accept?`);
+        const confirmed = window.confirm(`Incoming call from ${data.fromUsername}. Accept?`);
         if (!confirmed) {
             socketRef.current?.send(JSON.stringify({ type: 'callRejected', to: data.from }));
             return;
