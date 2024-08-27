@@ -10,7 +10,7 @@ interface Props {
 
 function Navbar({ userName }: Props) {
     return (
-        <motion.nav className="fixed top-0 left-0 right-0 z-50 border-b w-full backdrop-blur px-3 py-2 bg-background/10"
+        <motion.nav className="fixed top-0 left-0 right-0 z-50 border-b w-full backdrop-blur-xl px-3 py-2"
             initial={{ opacity: 0, y: -100 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: 'easeInOut' }}
