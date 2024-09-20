@@ -6,7 +6,7 @@ import useVideoCalls from "./useVideoCalls";
 import { UserResource } from "@clerk/types";
 
 const useVideoCallApp = (user: UserResource | null | undefined, getToken: () => Promise<string | null>, toast: (options: { description: string }) => void) => {
-    const { socketRef, isConnecting } = useWebSocket(user, getToken);
+    const { socketRef } = useWebSocket(user, getToken);
     const { receivedMessages, handleMessage } = useMessageHandling(socketRef);
     const { connectedUsers, currentUser, handleUserData } = useUserManagement(socketRef);
     const {

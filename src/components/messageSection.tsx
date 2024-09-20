@@ -1,4 +1,4 @@
-import { User } from "@/app/page";
+import { User } from "@/types";
 
 interface Message {
     recivedMessages: Array<{ content: string, sender: string }>;
