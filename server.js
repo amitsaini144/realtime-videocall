@@ -75,7 +75,6 @@ wss.on("connection", async function connection(ws, req) {
     users.delete(userId);
     broadcastUserList();
   });
-
   broadcastUserList();
 });
 

@@ -1,16 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import { User } from "@/types";
-import { UserResource } from "@clerk/types";
+import { useCallback, useRef, useState } from "react";
 
-function useVideoCall(user: UserResource | null | undefined, getToken: () => Promise<string | null>, toast: (options: { description: string }) => void) {
+const useVideoCalls = (socketRef: React.RefObject<WebSocket>, toast: (options: { description: string }) => void) => {
     const [inCall, setInCall] = useState(false);
-    const [connectedUsers, setConnectedUsers] = useState<User[]>([]);
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [isConnecting, setIsConnecting] = useState(false);
-    const [receivedMessages, setReceivedMessages] = useState<Array<{ content: string, sender: string }>>([]);
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-    const socketRef = useRef<WebSocket | null>(null);
     const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
     const iceCandidateBuffer = useRef<RTCIceCandidateInit[]>([]);
     const remoteDescriptionSet = useRef<boolean>(false);
@@ -75,7 +69,7 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            setLocalStream(stream)
+            setLocalStream(stream);
             const pc = new RTCPeerConnection(configuration);
 
             pc.onicecandidate = (event) => {
@@ -123,7 +117,6 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
 
             peerConnectionRef.current = pc;
             setInCall(true);
-            // console.log("local stream", localStream);
 
         } catch (error) {
             console.error('Error starting call:', error);
@@ -147,8 +140,6 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then(stream => {
                 setLocalStream(stream);
-              console.log("local stream", localStream);
-
 
                 const pc = new RTCPeerConnection(configuration);
                 pc.onicecandidate = (event) => {
@@ -206,7 +197,6 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
                     });
 
                 setInCall(true);
-
             })
             .catch(error => {
                 console.error('Error accessing media devices.', error);
@@ -241,94 +231,16 @@ function useVideoCall(user: UserResource | null | undefined, getToken: () => Pro
         toast({ description: 'Call ended' });
     }, [toast, localStream]);
 
-    const connectWebSocket = useCallback(async () => {
-        if (!user || isConnecting || socketRef.current) return;
-
-        setIsConnecting(true);
-
-        try {
-            const token = await getToken();
-            const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
-            const ws = new WebSocket(`${WS_URL}?token=${token}`);
-
-            ws.onopen = () => {
-                socketRef.current = ws;
-                setIsConnecting(true);
-            };
-
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                switch (data.type) {
-                    case 'message':
-                        setReceivedMessages(prev => [...prev, { content: data.content, sender: data.sender }]);
-                        break;
-                    case 'userList':
-                        setConnectedUsers(data.users);
-                        break;
-                    case 'userData':
-                        setCurrentUser(data.user);
-                        break;
-                    case `videoCallOffer`:
-                        handleIncomingCall(data);
-                        break;
-                    case 'videoCallAnswer':
-                        handleCallAccepted(data);
-                        break;
-                    case 'iceCandidate':
-                        handleNewICECandidate(data);
-                        break;
-                    case 'handleEndCall':
-                        handleCallEnded();
-                        break;
-                }
-            };
-
-            ws.onclose = () => {
-                setTimeout(connectWebSocket, 10000);
-                socketRef.current = null;
-                setIsConnecting(false);
-            };
-
-            ws.onerror = (error) => {
-                setIsConnecting(false);
-            };
-
-        } catch (error) {
-            setIsConnecting(false);
-        }
-
-    }, [user, getToken, isConnecting]);
-
-    const checkAndRestartIce = useCallback(() => {
-        if (peerConnectionRef.current && peerConnectionRef.current.iceConnectionState === 'failed') {
-            peerConnectionRef.current.restartIce();
-        }
-
-    }, []);
-
-    useEffect(() => {
-        const interval = setInterval(checkAndRestartIce, 5000);
-        return () => clearInterval(interval);
-    }, [checkAndRestartIce]);
-
-    useEffect(() => {
-        connectWebSocket();
-        return () => {
-            socketRef.current?.close();
-        };
-    }, [connectWebSocket]);
-
     return {
-        connectedUsers,
-        currentUser,
-        receivedMessages,
-        socketRef,
-        startCall,
-        handleCallEnded,
+        inCall,
         localStream,
         remoteStream,
-        inCall
+        startCall,
+        handleIncomingCall,
+        handleCallAccepted,
+        handleNewICECandidate,
+        handleCallEnded
     };
-}
+};
 
-export default useVideoCall;
+export default useVideoCalls;
