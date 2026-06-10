@@ -24,14 +24,9 @@ export default function UserCard({ userName, onClick }: UserCardProps) {
       transition={{ duration: 0.6 }}
     >
       <h1>{userName}</h1>
-      <motion.div
-        className='w-full'
-        whileHover={{ scale: 1.01 }}
-        transition={{ duration: 0.1 }}
-      >
+      <motion.div className='w-full' whileHover={{ scale: 1.01 }} transition={{ duration: 0.1 }}>
         <Button
-          className={`px-3 py-1 rounded-xl w-full text-white ${isCalling ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#03AED2] hover:bg-[#03AED2]/80 hover:text-white'
-            }`}
+          className={`px-3 py-1 rounded-xl w-full text-white ${isCalling ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand hover:bg-brand/80 hover:text-white'}`}
           onClick={handleClick}
           disabled={isCalling}
         >
@@ -39,5 +34,5 @@ export default function UserCard({ userName, onClick }: UserCardProps) {
         </Button>
       </motion.div>
     </motion.div>
-  )
+  );
 }

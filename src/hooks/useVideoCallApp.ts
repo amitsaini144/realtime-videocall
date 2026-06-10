@@ -1,60 +1,94 @@
-import { useEffect } from "react";
-import useMessageHandling from "./useMessageHandling";
-import useWebSocket from "./useWebSocket";
-import useUserManagement from "./useUserManagement";
-import useVideoCalls from "./useVideoCalls";
-import { UserResource } from "@clerk/types";
+import { useCallback, useRef, useState } from 'react';
+import { UserResource } from '@clerk/types';
+import { User, ChatMessage, InboundWsMessage } from '@/types';
+import useWebSocketConnection from './useWebSocketConnection';
+import usePeerConnection from './usePeerConnection';
+import useCall from './useCall';
 
-const useVideoCallApp = (user: UserResource | null | undefined, getToken: () => Promise<string | null>, toast: (options: { description: string }) => void) => {
-    const { socketRef } = useWebSocket(user, getToken);
-    const { receivedMessages, handleMessage } = useMessageHandling(socketRef);
-    const { connectedUsers, currentUser, handleUserData } = useUserManagement(socketRef);
-    const {
-        inCall,
-        localStream,
-        remoteStream,
-        startCall,
-        handleIncomingCall,
-        handleCallAccepted,
-        handleNewICECandidate,
-        handleCallEnded
-    } = useVideoCalls(socketRef, toast);
+type ToastFn = (options: { description: string }) => void;
 
-    useEffect(() => {
-        if (socketRef.current) {
-            socketRef.current.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                handleMessage(data);
-                handleUserData(data);
-                switch (data.type) {
-                    case 'videoCallOffer':
-                        handleIncomingCall(data);
-                        break;
-                    case 'videoCallAnswer':
-                        handleCallAccepted(data);
-                        break;
-                    case 'iceCandidate':
-                        handleNewICECandidate(data);
-                        break;
-                    case 'handleEndCall':
-                        handleCallEnded();
-                        break;
-                }
-            };
-        }
-    }, []);
+function useVideoCallApp(
+  user: UserResource | null | undefined,
+  getToken: () => Promise<string | null>,
+  toast: ToastFn,
+) {
+  const [connectedUsers, setConnectedUsers] = useState<User[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [receivedMessages, setReceivedMessages] = useState<ChatMessage[]>([]);
 
-    return {
-        connectedUsers,
-        currentUser,
-        receivedMessages,
-        socketRef,
-        startCall,
-        handleCallEnded,
-        localStream,
-        remoteStream,
-        inCall
-    };
-};
+  const {
+    peerConnectionRef,
+    remoteDescriptionSet,
+    addBufferedCandidates,
+    handleNewICECandidate,
+    createPeerConnection,
+    closePeerConnection,
+  } = usePeerConnection();
+
+  // Stable ref so the WS handler always calls the latest version of call callbacks
+  // without requiring reconnection when those callbacks change.
+  const onMessageRef = useRef<(event: MessageEvent) => void>(() => {});
+
+  const { socketRef, connectionState } = useWebSocketConnection(user, getToken, onMessageRef);
+
+  const {
+    inCall,
+    localStream,
+    remoteStream,
+    startCall,
+    handleIncomingCall,
+    handleCallAccepted,
+    handleCallEnded,
+  } = useCall(
+    socketRef,
+    peerConnectionRef,
+    remoteDescriptionSet,
+    addBufferedCandidates,
+    createPeerConnection,
+    closePeerConnection,
+    toast,
+  );
+
+  // Update the ref synchronously every render — WS handler always uses current callbacks.
+  onMessageRef.current = useCallback((event: MessageEvent) => {
+    const data = JSON.parse(event.data) as InboundWsMessage;
+    switch (data.type) {
+      case 'message':
+        setReceivedMessages(prev => [...prev, { content: data.content, sender: data.sender }]);
+        break;
+      case 'userList':
+        setConnectedUsers(data.users);
+        break;
+      case 'userData':
+        setCurrentUser(data.user);
+        break;
+      case 'videoCallOffer':
+        handleIncomingCall(data);
+        break;
+      case 'videoCallAnswer':
+        handleCallAccepted(data);
+        break;
+      case 'iceCandidate':
+        handleNewICECandidate(data);
+        break;
+      case 'endCall':
+        handleCallEnded();
+        break;
+    }
+  }, [handleIncomingCall, handleCallAccepted, handleCallEnded, handleNewICECandidate]);
+
+  return {
+    connectedUsers,
+    currentUser,
+    receivedMessages,
+    socketRef,
+    connectionState,
+    inCall,
+    localStream,
+    remoteStream,
+    startCall,
+    handleCallEnded,
+  };
+}
 
 export default useVideoCallApp;

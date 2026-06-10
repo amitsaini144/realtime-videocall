@@ -1,0 +1,27 @@
+'use client'
+
+import React from 'react';
+import { UserButton } from '@clerk/nextjs';
+import { motion } from 'framer-motion';
+
+interface NavbarProps {
+  userName: string;
+}
+
+function Navbar({ userName }: NavbarProps) {
+  return (
+    <motion.nav
+      className="fixed top-0 left-0 right-0 z-50 border-b w-full backdrop-blur-xl px-3 py-2"
+      initial={{ opacity: 0, y: -100 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: 'easeInOut' }}
+    >
+      <div className="mx-auto flex flex-row justify-between items-center px-0">
+        <h2 className='text-white'>Welcome, {userName}</h2>
+        <UserButton />
+      </div>
+    </motion.nav>
+  );
+}
+
+export default Navbar;
