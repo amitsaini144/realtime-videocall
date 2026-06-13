@@ -4,6 +4,12 @@ import { logger } from '@/lib/logger';
 
 type ToastFn = (options: { description: string }) => void;
 
+export interface IncomingCallData {
+  from: string;
+  fromUsername: string;
+  offer: RTCSessionDescriptionInit;
+}
+
 function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
   return new Promise<void>((resolve) => {
     const check = () => { if (pc.iceGatheringState === 'complete') resolve(); };
@@ -29,7 +35,9 @@ function useCall(
   const [inCall, setInCall] = useState(false);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [incomingCall, setIncomingCall] = useState<IncomingCallData | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const pendingCallRef = useRef<IncomingCallData | null>(null);
 
   const handleCallEnded = useCallback(() => {
     closePeerConnection();
@@ -80,21 +88,20 @@ function useCall(
     }
   }, [inCall, socketRef, createPeerConnection, handleCallEnded, toast]);
 
-  const handleIncomingCall = useCallback((data: {
-    from: string;
-    fromUsername: string;
-    offer: RTCSessionDescriptionInit;
-  }) => {
+  const handleIncomingCall = useCallback((data: IncomingCallData) => {
     if (inCall) {
       socketRef.current?.send(JSON.stringify({ type: 'callBusy', to: data.from }));
       return;
     }
+    pendingCallRef.current = data;
+    setIncomingCall(data);
+  }, [inCall, socketRef]);
 
-    const confirmed = globalThis.confirm(`Incoming call from ${data.fromUsername}. Accept?`);
-    if (!confirmed) {
-      socketRef.current?.send(JSON.stringify({ type: 'callRejected', to: data.from }));
-      return;
-    }
+  const acceptCall = useCallback(() => {
+    const data = pendingCallRef.current;
+    if (!data) return;
+    setIncomingCall(null);
+    pendingCallRef.current = null;
 
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       .then(stream => {
@@ -146,7 +153,16 @@ function useCall(
         logger.error('Error accessing media devices:', error);
         toast({ description: 'Failed to access camera/microphone' });
       });
-  }, [inCall, socketRef, createPeerConnection, handleCallEnded, remoteDescriptionSet, addBufferedCandidates, toast]);
+  }, [socketRef, createPeerConnection, handleCallEnded, remoteDescriptionSet, addBufferedCandidates, closePeerConnection, toast]);
+
+  const rejectCall = useCallback(() => {
+    const data = pendingCallRef.current;
+    if (data) {
+      socketRef.current?.send(JSON.stringify({ type: 'callRejected', to: data.from }));
+    }
+    pendingCallRef.current = null;
+    setIncomingCall(null);
+  }, [socketRef]);
 
   const handleCallAccepted = useCallback((data: { answer: RTCSessionDescriptionInit }) => {
     if (!peerConnectionRef.current) return;
@@ -162,7 +178,10 @@ function useCall(
     inCall,
     localStream,
     remoteStream,
+    incomingCall,
     startCall,
+    acceptCall,
+    rejectCall,
     handleIncomingCall,
     handleCallAccepted,
     handleCallEnded,

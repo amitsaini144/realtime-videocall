@@ -39,16 +39,32 @@ wss.on("connection", async function connection(ws, req) {
   }
 
   const userId = user.id;
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ");
+  const externalName = [
+    user.externalAccounts[0]?.firstName,
+    user.externalAccounts[0]?.lastName,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const displayName =
+    user.username ||
+    fullName ||
+    externalName ||
+    user.emailAddresses[0]?.emailAddress ||
+    "Unknown";
+
   users.set(userId, ws);
   ws.userId = userId;
-  ws.username = user.username;
+  ws.username = displayName;
+  ws.imageUrl = user.imageUrl ?? null;
 
   ws.send(
     JSON.stringify({
       type: "userData",
       user: {
         id: user.id,
-        username: user.username,
+        username: displayName,
+        imageUrl: user.imageUrl ?? null,
       },
     })
   );
@@ -60,7 +76,7 @@ wss.on("connection", async function connection(ws, req) {
 
     switch (messageData.type) {
       case "message":
-        handleChatMessage(messageData, user);
+        handleChatMessage(messageData, ws);
         break;
       case "videoCallOffer":
       case "videoCallAnswer":
@@ -80,14 +96,15 @@ wss.on("connection", async function connection(ws, req) {
   broadcastUserList();
 });
 
-function handleChatMessage(messageData, user) {
+function handleChatMessage(messageData, ws) {
   wss.clients.forEach(function each(client) {
-    if (client.readyState === WebSocket.OPEN) {
+    if (client !== ws && client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
           type: "message",
           content: messageData.content,
-          sender: user.username,
+          sender: ws.username,
+          senderImageUrl: ws.imageUrl,
         })
       );
     }
@@ -126,6 +143,7 @@ function broadcastUserList() {
   const userList = Array.from(users.entries()).map(([id, ws]) => ({
     id,
     username: ws.username,
+    imageUrl: ws.imageUrl,
   }));
   wss.clients.forEach(function each(client) {
     if (client.readyState === WebSocket.OPEN) {

@@ -1,16 +1,18 @@
 'use client'
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { Video } from 'lucide-react';
 
 interface UserCardProps {
   userName: string;
+  imageUrl?: string | null;
   onClick: () => void;
 }
 
-export default function UserCard({ userName, onClick }: Readonly<UserCardProps>) {
+export default function UserCard({ userName, imageUrl, onClick }: Readonly<UserCardProps>) {
   const [isCalling, setIsCalling] = useState(false);
 
   const handleClick = () => {
@@ -27,10 +29,14 @@ export default function UserCard({ userName, onClick }: Readonly<UserCardProps>)
       transition={{ duration: 0.4 }}
     >
       <div className="relative flex-shrink-0">
-        <div className="w-10 h-10 rounded-full bg-brand flex items-center justify-center">
-          <span className="text-white font-semibold text-sm">
-            {userName.charAt(0).toUpperCase()}
-          </span>
+        <div className="w-10 h-10 rounded-full bg-brand flex items-center justify-center overflow-hidden">
+          {imageUrl ? (
+            <Image src={imageUrl} alt={userName} width={40} height={40} className="object-cover" />
+          ) : (
+            <span className="text-white font-semibold text-sm">
+              {userName.charAt(0).toUpperCase()}
+            </span>
+          )}
         </div>
         <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full" />
       </div>

@@ -16,6 +16,11 @@ function useVideoCallApp(
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [receivedMessages, setReceivedMessages] = useState<ChatMessage[]>([]);
 
+  // Always-current ref so the WS handler (which has a stale closure) can still
+  // read the latest username without needing to be re-created on every render.
+  const currentUserRef = useRef<User | null>(null);
+  currentUserRef.current = currentUser;
+
   const {
     peerConnectionRef,
     remoteDescriptionSet,
@@ -35,7 +40,10 @@ function useVideoCallApp(
     inCall,
     localStream,
     remoteStream,
+    incomingCall,
     startCall,
+    acceptCall,
+    rejectCall,
     handleIncomingCall,
     handleCallAccepted,
     handleCallEnded,
@@ -54,10 +62,10 @@ function useVideoCallApp(
     const data = JSON.parse(event.data) as InboundWsMessage;
     switch (data.type) {
       case 'message':
-        setReceivedMessages(prev => [...prev, { id: crypto.randomUUID(), content: data.content, sender: data.sender }]);
+        setReceivedMessages(prev => [...prev, { id: crypto.randomUUID(), content: data.content, sender: data.sender, senderImageUrl: data.senderImageUrl, isOwn: false }]);
         break;
       case 'userList':
-        setConnectedUsers(data.users);
+        setConnectedUsers(data.users.map(u => ({ ...u, imageUrl: u.imageUrl ?? null })));
         break;
       case 'userData':
         setCurrentUser(data.user);
@@ -77,6 +85,26 @@ function useVideoCallApp(
     }
   }, [handleIncomingCall, handleCallAccepted, handleCallEnded, handleNewICECandidate]);
 
+  const displayName = user?.username ?? user?.firstName ?? user?.emailAddresses[0]?.emailAddress ?? 'Unknown';
+
+  const sendMessage = useCallback((content: string) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN && currentUserRef.current) {
+      socketRef.current.send(JSON.stringify({
+        type: 'message',
+        content,
+        sender: displayName,
+      }));
+      // Add own message immediately with isOwn: true — no server echo needed.
+      setReceivedMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
+        content,
+        sender: displayName,
+        senderImageUrl: currentUserRef.current?.imageUrl ?? null,
+        isOwn: true,
+      }]);
+    }
+  }, [socketRef, displayName]);
+
   return {
     connectedUsers,
     currentUser,
@@ -86,8 +114,12 @@ function useVideoCallApp(
     inCall,
     localStream,
     remoteStream,
+    incomingCall,
     startCall,
+    acceptCall,
+    rejectCall,
     handleCallEnded,
+    sendMessage,
   };
 }
 

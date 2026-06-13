@@ -12,6 +12,7 @@ import UserCard from '@/components/users/UserCard';
 import MessageSection from '@/components/chat/MessageSection';
 import MessageInput from '@/components/chat/MessageInput';
 import VideoCallOverlay from '@/components/call/VideoCallOverlay';
+import IncomingCallDialog from '@/components/call/IncomingCallDialog';
 
 export default function Home() {
   const { user } = useUser();
@@ -29,6 +30,10 @@ export default function Home() {
     localStream,
     remoteStream,
     inCall,
+    incomingCall,
+    acceptCall,
+    rejectCall,
+    sendMessage,
   } = useVideoCallApp(user, getToken, toast);
 
   const scrollToBottom = useCallback(() => {
@@ -38,12 +43,6 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom();
   }, [receivedMessages, scrollToBottom]);
-
-  const handleSendMessage = useCallback((message: string) => {
-    if (socketRef.current?.readyState === WebSocket.OPEN && currentUser) {
-      socketRef.current.send(JSON.stringify({ type: 'message', content: message, sender: currentUser.username }));
-    }
-  }, [currentUser, socketRef]);
 
   if (!currentUser || !socketRef.current) {
     return (
@@ -60,7 +59,12 @@ export default function Home() {
     <div className='relative flex flex-col min-h-screen bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
       <MovingCloudsBackground />
       <div className='relative z-10 flex flex-col min-h-screen bg-white/10 backdrop-blur-[2px]'>
-        <Navbar userName={currentUser.username || 'Unknown'} />
+        <Navbar userName={
+          user?.username ||
+          [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+          user?.emailAddresses[0]?.emailAddress ||
+          'Unknown'
+        } />
 
         <div className='flex flex-col flex-grow pt-16'>
           {otherConnectedUsers.length === 0 ? (
@@ -81,13 +85,13 @@ export default function Home() {
           ) : (
             <div className='flex flex-col md:flex-row flex-grow min-h-0 gap-4 p-4 pb-4'>
               <aside className='md:w-64 lg:w-72 flex-shrink-0'>
-                <div className='bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20 h-full'>
+                <div className='bg-white/15 backdrop-blur-2xl rounded-2xl p-4 border border-white/25 h-full'>
                   <p className='text-white/60 text-xs font-semibold uppercase tracking-widest mb-3'>
                     Online — {otherConnectedUsers.length}
                   </p>
                   <div className='flex flex-row md:flex-col gap-3 flex-wrap md:flex-nowrap'>
                     {otherConnectedUsers.map((u) => (
-                      <UserCard key={u.id} userName={u.username || 'Unknown'} onClick={() => startCall(u)} />
+                      <UserCard key={u.id} userName={u.username || 'Unknown'} imageUrl={u.imageUrl} onClick={() => startCall(u)} />
                     ))}
                   </div>
                 </div>
@@ -95,7 +99,7 @@ export default function Home() {
 
               <main className='flex flex-col flex-grow min-h-0'>
                 <MessageSection receivedMessages={receivedMessages} messagesEndRef={messagesEndRef} currentUser={currentUser} />
-                <MessageInput onSend={handleSendMessage} />
+                <MessageInput onSend={sendMessage} />
               </main>
             </div>
           )}
@@ -103,6 +107,13 @@ export default function Home() {
       </div>
 
       <VideoCallOverlay inCall={inCall} localStream={localStream} remoteStream={remoteStream} handleCallEnded={handleCallEnded} />
+      {incomingCall && (
+        <IncomingCallDialog
+          callerName={incomingCall.fromUsername}
+          onAccept={acceptCall}
+          onReject={rejectCall}
+        />
+      )}
     </div>
   );
 }

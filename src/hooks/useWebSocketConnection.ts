@@ -20,11 +20,14 @@ function useWebSocketConnection(
 
     try {
       const token = await getToken({ skipCache: true });
+
+      if (socketRef.current) return;
+
       const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
       const ws = new WebSocket(`${WS_URL}?token=${token}`);
+      socketRef.current = ws;
 
       ws.onopen = () => {
-        socketRef.current = ws;
         setConnectionState('connected');
       };
 
