@@ -3,6 +3,7 @@ import { useUser, useAuth } from '@clerk/nextjs';
 import { useEffect, useRef, useCallback } from 'react'
 import { useToast } from "@/components/ui/use-toast"
 import { motion } from 'framer-motion';
+import { Video } from 'lucide-react';
 import useVideoCallApp from '@/hooks/useVideoCallApp';
 import Navbar from '@/components/layout/Navbar';
 import LoadingScreen from '@/components/layout/LoadingScreen';
@@ -46,7 +47,7 @@ export default function Home() {
 
   if (!currentUser || !socketRef.current) {
     return (
-      <div className='relative flex flex-col min-h-screen bg-gradient-to-bl from-sky-600 via-sky-400 to-sky-200'>
+      <div className='relative flex flex-col min-h-screen bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
         <MovingCloudsBackground />
         <LoadingScreen />
       </div>
@@ -56,35 +57,46 @@ export default function Home() {
   const otherConnectedUsers = connectedUsers.filter(u => u.id !== currentUser.id);
 
   return (
-    <div className='relative flex flex-col min-h-screen bg-gradient-to-bl from-sky-600 via-sky-400 to-sky-200'>
+    <div className='relative flex flex-col min-h-screen bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
       <MovingCloudsBackground />
       <div className='relative z-10 flex flex-col min-h-screen bg-white/10 backdrop-blur-[2px]'>
         <Navbar userName={currentUser.username || 'Unknown'} />
 
-        <div className='w-full max-w-4xl mx-auto mt-20 px-4 flex flex-col items-center justify-center flex-grow'>
+        <div className='flex flex-col flex-grow pt-16'>
           {otherConnectedUsers.length === 0 ? (
-            <motion.div
-              className="text-white text-xl md:text-base"
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, ease: 'easeInOut' }}
-            >
-              No other users connected.
-            </motion.div>
-          ) : (
-            <div className='w-full flex flex-col justify-between h-full min-h-screen'>
-              <div className='flex flex-col items-center justify-center'>
-                <div className='flex flex-wrap justify-center gap-4 mb-4'>
-                  {otherConnectedUsers.map((u) => (
-                    <UserCard key={u.id} userName={u.username || 'Unknown'} onClick={() => startCall(u)} />
-                  ))}
+            <div className='flex flex-grow items-center justify-center'>
+              <motion.div
+                className='flex flex-col items-center gap-3 text-white'
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, ease: 'easeInOut' }}
+              >
+                <div className='bg-white/20 p-4 rounded-2xl'>
+                  <Video className='h-10 w-10 text-white' />
                 </div>
-              </div>
+                <p className='text-xl font-semibold'>No one else is here yet</p>
+                <p className='text-white/60 text-sm'>Share the app link to start a call</p>
+              </motion.div>
+            </div>
+          ) : (
+            <div className='flex flex-col md:flex-row flex-grow min-h-0 gap-4 p-4 pb-4'>
+              <aside className='md:w-64 lg:w-72 flex-shrink-0'>
+                <div className='bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20 h-full'>
+                  <p className='text-white/60 text-xs font-semibold uppercase tracking-widest mb-3'>
+                    Online — {otherConnectedUsers.length}
+                  </p>
+                  <div className='flex flex-row md:flex-col gap-3 flex-wrap md:flex-nowrap'>
+                    {otherConnectedUsers.map((u) => (
+                      <UserCard key={u.id} userName={u.username || 'Unknown'} onClick={() => startCall(u)} />
+                    ))}
+                  </div>
+                </div>
+              </aside>
 
-              <div className='w-full'>
+              <main className='flex flex-col flex-grow min-h-0'>
                 <MessageSection receivedMessages={receivedMessages} messagesEndRef={messagesEndRef} currentUser={currentUser} />
                 <MessageInput onSend={handleSendMessage} />
-              </div>
+              </main>
             </div>
           )}
         </div>

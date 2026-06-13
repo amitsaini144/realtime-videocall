@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Button } from '@/components/ui/button';
+import { SendHorizontal } from 'lucide-react';
 
 interface MessageInputProps {
   onSend: (message: string) => void;
 }
 
-export default function MessageInput({ onSend }: MessageInputProps) {
+export default function MessageInput({ onSend }: Readonly<MessageInputProps>) {
   const [messageInput, setMessageInput] = useState('');
 
   const handleSend = () => {
@@ -20,27 +20,27 @@ export default function MessageInput({ onSend }: MessageInputProps) {
 
   return (
     <motion.div
-      className='w-full py-4'
-      initial={{ opacity: 0, y: 100, scale: 0.5 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.5 }}
+      className="mt-3"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
     >
-      <div className='max-w-4xl mx-auto flex items-center'>
+      <div className="flex items-center gap-2 bg-white rounded-2xl px-4 py-2.5 shadow-sm border border-gray-100">
         <input
-          className='flex-grow mr-2 p-2 rounded-xl focus:outline-none'
-          placeholder='Say hi to everyone'
+          className="flex-grow text-sm text-gray-700 placeholder-gray-400 bg-transparent focus:outline-none"
+          placeholder="Say hi to everyone..."
           value={messageInput}
           onChange={(e) => setMessageInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           maxLength={100}
         />
-        <Button
-          className='bg-brand rounded-xl text-white hover:text-white/90 hover:bg-brand/70 shadow-sm'
-          variant='ghost'
+        <button
           onClick={handleSend}
+          disabled={!messageInput.trim()}
+          className="p-2 rounded-xl bg-brand text-white hover:bg-brand/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
         >
-          Send
-        </Button>
+          <SendHorizontal className="h-4 w-4" />
+        </button>
       </div>
     </motion.div>
   );

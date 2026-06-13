@@ -34,19 +34,28 @@ function usePeerConnection() {
     ): RTCPeerConnection => {
       const pc = new RTCPeerConnection(RTC_CONFIGURATION);
 
-      pc.ontrack = (event) => onTrack(event.streams[0]);
+      pc.ontrack = (event) => {
+        logger.error(`ontrack fired: streams=${event.streams.length}, track kind=${event.track.kind}`);
+        onTrack(event.streams[0]);
+      };
 
       pc.onicecandidate = (event) => {
         if (event.candidate) onIceCandidate(event.candidate);
       };
 
       pc.oniceconnectionstatechange = () => {
+        logger.error(`ICE connection state: ${pc.iceConnectionState}`);
         if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
           pc.restartIce();
         }
       };
 
+      pc.onicegatheringstatechange = () => {
+        logger.error(`ICE gathering state: ${pc.iceGatheringState}`);
+      };
+
       pc.onconnectionstatechange = () => {
+        logger.error(`Connection state: ${pc.connectionState}`);
         if (pc.connectionState === 'failed') onConnectionFailed();
       };
 

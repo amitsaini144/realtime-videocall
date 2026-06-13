@@ -8,7 +8,9 @@ import cors from "cors";
 const app = express();
 app.use(cors());
 const port = process.env.NEXT_PUBLIC_PORT || 8080;
-const httpServer = app.listen(port);
+const httpServer = app.listen(port, () => {
+  console.log(`WebSocket server running on port ${port}`);
+});
 
 const clerkClient = createClerkClient({
   secretKey: process.env.CLERK_SECRET_KEY,

@@ -129,6 +129,15 @@ function useCall(
               answer: pc.localDescription,
               to: data.from,
             }));
+          })
+          .catch(error => {
+            logger.error('Error handling incoming call offer:', error);
+            toast({ description: 'Failed to connect call' });
+            closePeerConnection();
+            localStreamRef.current?.getTracks().forEach(track => track.stop());
+            localStreamRef.current = null;
+            setLocalStream(null);
+            setInCall(false);
           });
 
         setInCall(true);

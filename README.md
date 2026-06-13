@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Realtime Video Call
+
+A peer-to-peer video calling app built with Next.js, WebRTC, and WebSockets. Users can see who's online and start a video/audio call directly from the browser.
+
+## Tech Stack
+
+- **Next.js 14** — frontend framework
+- **WebRTC** — peer-to-peer video/audio
+- **WebSocket (ws)** — signaling server
+- **Socket.io** — real-time events
+- **Clerk** — authentication
+- **Tailwind CSS + Framer Motion** — UI & animations
 
 ## Getting Started
 
-First, run the development server:
+### 1. Install dependencies
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Set up environment variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Copy `.env.example` to `.env.local` and fill in the values:
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+```bash
+cp .env.example .env.local
+```
 
-## Learn More
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk publishable key |
+| `CLERK_SECRET_KEY` | Clerk secret key |
+| `NEXT_PUBLIC_WS_URL` | WebSocket server URL (e.g. `ws://localhost:8080`) |
+| `PORT` | Port for the WebSocket server (default: `8080`) |
 
-To learn more about Next.js, take a look at the following resources:
+Get your Clerk keys from [clerk.com](https://clerk.com).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Run the app
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+You need to run both the Next.js frontend and the WebSocket signaling server.
 
-## Deploy on Vercel
+**Development (frontend only):**
+```bash
+npm run dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Production / with signaling server:**
+```bash
+npm run start
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+The WebSocket server runs on port `8080` by default. The Next.js app runs on [http://localhost:3000](http://localhost:3000).
+
+## How It Works
+
+1. Sign in via Clerk
+2. See other online users on the home screen
+3. Click a user to initiate a video call
+4. WebRTC handles the peer-to-peer media stream; the WebSocket server handles signaling

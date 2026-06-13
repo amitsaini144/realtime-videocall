@@ -1,13 +1,16 @@
+'use client'
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
+import { Video } from 'lucide-react';
 
 interface UserCardProps {
   userName: string;
   onClick: () => void;
 }
 
-export default function UserCard({ userName, onClick }: UserCardProps) {
+export default function UserCard({ userName, onClick }: Readonly<UserCardProps>) {
   const [isCalling, setIsCalling] = useState(false);
 
   const handleClick = () => {
@@ -18,19 +21,37 @@ export default function UserCard({ userName, onClick }: UserCardProps) {
 
   return (
     <motion.div
-      className="flex flex-col p-3 rounded-xl gap-3 w-48 items-center bg-white shadow-lg"
-      initial={{ opacity: 0, scale: 0.5 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.6 }}
+      className="flex items-center gap-3 p-3 rounded-xl bg-white shadow-md w-full"
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.4 }}
     >
-      <h1>{userName}</h1>
-      <motion.div className='w-full' whileHover={{ scale: 1.01 }} transition={{ duration: 0.1 }}>
+      <div className="relative flex-shrink-0">
+        <div className="w-10 h-10 rounded-full bg-brand flex items-center justify-center">
+          <span className="text-white font-semibold text-sm">
+            {userName.charAt(0).toUpperCase()}
+          </span>
+        </div>
+        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full" />
+      </div>
+
+      <div className="flex-grow min-w-0">
+        <p className="text-gray-800 font-semibold text-sm truncate">{userName}</p>
+        <p className="text-gray-400 text-xs">Online</p>
+      </div>
+
+      <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.1 }}>
         <Button
-          className={`px-3 py-1 rounded-xl w-full text-white ${isCalling ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand hover:bg-brand/80 hover:text-white'}`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-medium h-auto ${
+            isCalling
+              ? 'bg-gray-300 cursor-not-allowed hover:bg-gray-300'
+              : 'bg-brand hover:bg-brand/80'
+          }`}
           onClick={handleClick}
           disabled={isCalling}
         >
-          {isCalling ? "Calling..." : "Video call"}
+          <Video className="h-3.5 w-3.5" />
+          {isCalling ? 'Calling...' : 'Call'}
         </Button>
       </motion.div>
     </motion.div>

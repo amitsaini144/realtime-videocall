@@ -6,7 +6,7 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
 
 function useWebSocketConnection(
   user: UserResource | null | undefined,
-  getToken: () => Promise<string | null>,
+  getToken: (options?: { skipCache?: boolean }) => Promise<string | null>,
   onMessageRef: React.MutableRefObject<(event: MessageEvent) => void>,
 ) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
@@ -19,7 +19,7 @@ function useWebSocketConnection(
     setConnectionState('connecting');
 
     try {
-      const token = await getToken();
+      const token = await getToken({ skipCache: true });
       const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
       const ws = new WebSocket(`${WS_URL}?token=${token}`);
 

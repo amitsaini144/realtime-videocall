@@ -9,7 +9,7 @@ type ToastFn = (options: { description: string }) => void;
 
 function useVideoCallApp(
   user: UserResource | null | undefined,
-  getToken: () => Promise<string | null>,
+  getToken: (options?: { skipCache?: boolean }) => Promise<string | null>,
   toast: ToastFn,
 ) {
   const [connectedUsers, setConnectedUsers] = useState<User[]>([]);
@@ -54,7 +54,7 @@ function useVideoCallApp(
     const data = JSON.parse(event.data) as InboundWsMessage;
     switch (data.type) {
       case 'message':
-        setReceivedMessages(prev => [...prev, { content: data.content, sender: data.sender }]);
+        setReceivedMessages(prev => [...prev, { id: crypto.randomUUID(), content: data.content, sender: data.sender }]);
         break;
       case 'userList':
         setConnectedUsers(data.users);
