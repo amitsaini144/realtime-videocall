@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { RTC_CONFIGURATION } from '@/lib/rtcConfig';
+import { useCallback, useRef } from 'react';
+import { getRtcConfiguration } from '@/lib/rtcConfig';
 import { logger } from '@/lib/logger';
+
+const ICE_RESTART_MIN_INTERVAL_MS = 5000;
 
 function usePeerConnection() {
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const iceCandidateBuffer = useRef<RTCIceCandidateInit[]>([]);
   const remoteDescriptionSet = useRef<boolean>(false);
+  const lastIceRestartRef = useRef<number>(0);
 
   const addBufferedCandidates = useCallback(() => {
     if (!peerConnectionRef.current || !remoteDescriptionSet.current) return;
@@ -27,15 +30,16 @@ function usePeerConnection() {
   }, []);
 
   const createPeerConnection = useCallback(
-    (
+    async (
       onTrack: (stream: MediaStream) => void,
       onIceCandidate: (candidate: RTCIceCandidate) => void,
       onConnectionFailed: () => void,
-    ): RTCPeerConnection => {
-      const pc = new RTCPeerConnection(RTC_CONFIGURATION);
+    ): Promise<RTCPeerConnection> => {
+      const config = await getRtcConfiguration();
+      const pc = new RTCPeerConnection(config);
 
       pc.ontrack = (event) => {
-        logger.error(`ontrack fired: streams=${event.streams.length}, track kind=${event.track.kind}`);
+        logger.log(`ontrack fired: streams=${event.streams.length}, track kind=${event.track.kind}`);
         onTrack(event.streams[0]);
       };
 
@@ -44,23 +48,28 @@ function usePeerConnection() {
       };
 
       pc.oniceconnectionstatechange = () => {
-        logger.error(`ICE connection state: ${pc.iceConnectionState}`);
+        logger.log(`ICE connection state: ${pc.iceConnectionState}`);
         if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-          pc.restartIce();
+          const now = Date.now();
+          if (now - lastIceRestartRef.current > ICE_RESTART_MIN_INTERVAL_MS) {
+            lastIceRestartRef.current = now;
+            pc.restartIce();
+          }
         }
       };
 
       pc.onicegatheringstatechange = () => {
-        logger.error(`ICE gathering state: ${pc.iceGatheringState}`);
+        logger.log(`ICE gathering state: ${pc.iceGatheringState}`);
       };
 
       pc.onconnectionstatechange = () => {
-        logger.error(`Connection state: ${pc.connectionState}`);
+        logger.log(`Connection state: ${pc.connectionState}`);
         if (pc.connectionState === 'failed') onConnectionFailed();
       };
 
       peerConnectionRef.current = pc;
       remoteDescriptionSet.current = false;
+      lastIceRestartRef.current = 0;
       return pc;
     },
     [],
@@ -72,17 +81,6 @@ function usePeerConnection() {
     iceCandidateBuffer.current = [];
     remoteDescriptionSet.current = false;
   }, []);
-
-  const checkAndRestartIce = useCallback(() => {
-    if (peerConnectionRef.current?.iceConnectionState === 'failed') {
-      peerConnectionRef.current.restartIce();
-    }
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(checkAndRestartIce, 5000);
-    return () => clearInterval(interval);
-  }, [checkAndRestartIce]);
 
   return {
     peerConnectionRef,

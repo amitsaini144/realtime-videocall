@@ -6,6 +6,8 @@ export type InboundWsMessage =
   | { type: 'videoCallAnswer'; answer: RTCSessionDescriptionInit; from: string }
   | { type: 'iceCandidate';    candidate: RTCIceCandidateInit; from: string }
   | { type: 'endCall';         from: string }
+  | { type: 'callBusy';        from: string }
+  | { type: 'callRejected';    from: string }
   | { type: 'error';           content: string };
 
 export type OutboundWsMessage =

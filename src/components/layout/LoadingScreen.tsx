@@ -3,7 +3,11 @@
 import { motion } from 'framer-motion';
 import { Video } from 'lucide-react';
 
-const LoadingScreen = () => {
+interface LoadingScreenProps {
+  message?: string;
+}
+
+const LoadingScreen = ({ message = 'Connecting to server...' }: LoadingScreenProps) => {
   return (
     <div className="flex flex-col items-center justify-center h-screen text-white gap-6">
       <motion.div
@@ -31,7 +35,7 @@ const LoadingScreen = () => {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
       >
-        Connecting to server...
+        {message}
       </motion.p>
     </div>
   );

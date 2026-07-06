@@ -47,6 +47,7 @@ function useVideoCallApp(
     handleIncomingCall,
     handleCallAccepted,
     handleCallEnded,
+    handleCallDeclined,
   } = useCall(
     socketRef,
     peerConnectionRef,
@@ -82,8 +83,14 @@ function useVideoCallApp(
       case 'endCall':
         handleCallEnded();
         break;
+      case 'callBusy':
+        handleCallDeclined('busy');
+        break;
+      case 'callRejected':
+        handleCallDeclined('rejected');
+        break;
     }
-  }, [handleIncomingCall, handleCallAccepted, handleCallEnded, handleNewICECandidate]);
+  }, [handleIncomingCall, handleCallAccepted, handleCallEnded, handleCallDeclined, handleNewICECandidate]);
 
   const displayName = user?.username ?? user?.firstName ?? user?.emailAddresses[0]?.emailAddress ?? 'Unknown';
 

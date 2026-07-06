@@ -28,7 +28,7 @@ function useCall(
     onTrack: (stream: MediaStream) => void,
     onIceCandidate: (candidate: RTCIceCandidate) => void,
     onConnectionFailed: () => void,
-  ) => RTCPeerConnection,
+  ) => Promise<RTCPeerConnection>,
   closePeerConnection: () => void,
   toast: ToastFn,
 ) {
@@ -49,6 +49,16 @@ function useCall(
     toast({ description: 'Call ended' });
   }, [closePeerConnection, toast]);
 
+  const handleCallDeclined = useCallback((reason: 'busy' | 'rejected') => {
+    closePeerConnection();
+    localStreamRef.current?.getTracks().forEach(track => track.stop());
+    localStreamRef.current = null;
+    setLocalStream(null);
+    setRemoteStream(null);
+    setInCall(false);
+    toast({ description: reason === 'busy' ? 'User is busy' : 'Call declined' });
+  }, [closePeerConnection, toast]);
+
   const startCall = useCallback(async (targetUser: User) => {
     if (inCall) return;
 
@@ -57,7 +67,7 @@ function useCall(
       localStreamRef.current = stream;
       setLocalStream(stream);
 
-      const pc = createPeerConnection(
+      const pc = await createPeerConnection(
         (remStream) => setRemoteStream(remStream),
         (candidate) => {
           socketRef.current?.send(JSON.stringify({
@@ -104,11 +114,11 @@ function useCall(
     pendingCallRef.current = null;
 
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      .then(stream => {
+      .then(async stream => {
         localStreamRef.current = stream;
         setLocalStream(stream);
 
-        const pc = createPeerConnection(
+        const pc = await createPeerConnection(
           (remStream) => setRemoteStream(remStream),
           (candidate) => {
             socketRef.current?.send(JSON.stringify({
@@ -185,6 +195,7 @@ function useCall(
     handleIncomingCall,
     handleCallAccepted,
     handleCallEnded,
+    handleCallDeclined,
   };
 }
 

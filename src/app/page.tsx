@@ -24,7 +24,6 @@ export default function Home() {
     connectedUsers,
     currentUser,
     receivedMessages,
-    socketRef,
     startCall,
     handleCallEnded,
     localStream,
@@ -34,6 +33,7 @@ export default function Home() {
     acceptCall,
     rejectCall,
     sendMessage,
+    connectionState,
   } = useVideoCallApp(user, getToken, toast);
 
   const scrollToBottom = useCallback(() => {
@@ -44,11 +44,13 @@ export default function Home() {
     scrollToBottom();
   }, [receivedMessages, scrollToBottom]);
 
-  if (!currentUser || !socketRef.current) {
+  if (!currentUser || connectionState !== 'connected') {
     return (
       <div className='relative flex flex-col min-h-screen bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
         <MovingCloudsBackground />
-        <LoadingScreen />
+        <LoadingScreen
+          message={currentUser ? 'Reconnecting to server...' : 'Connecting to server...'}
+        />
       </div>
     );
   }

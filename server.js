@@ -16,8 +16,36 @@ const clerkClient = createClerkClient({
   secretKey: process.env.CLERK_SECRET_KEY,
 });
 
-const wss = new WebSocketServer({ server: httpServer });
+const wss = new WebSocketServer({ server: httpServer, maxPayload: 64 * 1024 });
 let users = new Map();
+
+const HEARTBEAT_INTERVAL_MS = 30000;
+
+const heartbeatInterval = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) {
+      ws.terminate();
+      return;
+    }
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, HEARTBEAT_INTERVAL_MS);
+
+wss.on("close", () => clearInterval(heartbeatInterval));
+
+const RATE_LIMIT_WINDOW_MS = 5000;
+const RATE_LIMIT_MAX_MESSAGES = 60;
+const MAX_CHAT_MESSAGE_LENGTH = 2000;
+
+function isRateLimited(ws) {
+  const now = Date.now();
+  ws.messageTimestamps = (ws.messageTimestamps || []).filter(
+    (t) => now - t < RATE_LIMIT_WINDOW_MS
+  );
+  ws.messageTimestamps.push(now);
+  return ws.messageTimestamps.length > RATE_LIMIT_MAX_MESSAGES;
+}
 
 wss.on("connection", async function connection(ws, req) {
   const parameters = url.parse(req.url, true);
@@ -57,6 +85,10 @@ wss.on("connection", async function connection(ws, req) {
   ws.userId = userId;
   ws.username = displayName;
   ws.imageUrl = user.imageUrl ?? null;
+  ws.isAlive = true;
+  ws.on("pong", () => {
+    ws.isAlive = true;
+  });
 
   ws.send(
     JSON.stringify({
@@ -72,31 +104,60 @@ wss.on("connection", async function connection(ws, req) {
   ws.on("error", console.error);
 
   ws.on("message", function message(data) {
-    const messageData = JSON.parse(data);
+    if (isRateLimited(ws)) {
+      ws.send(JSON.stringify({ type: "error", content: "Rate limit exceeded" }));
+      return;
+    }
 
-    switch (messageData.type) {
-      case "message":
-        handleChatMessage(messageData, ws);
-        break;
-      case "videoCallOffer":
-      case "videoCallAnswer":
-      case "iceCandidate":
-        forwardMessage(messageData, ws);
-        break;
-      case "endCall":
-        handleEndCall(messageData, ws);
-        break;
+    let messageData;
+    try {
+      messageData = JSON.parse(data);
+    } catch (error) {
+      console.error("Failed to parse WS message:", error);
+      return;
+    }
+
+    if (!messageData || typeof messageData.type !== "string") return;
+
+    try {
+      switch (messageData.type) {
+        case "message":
+          handleChatMessage(messageData, ws);
+          break;
+        case "videoCallOffer":
+        case "videoCallAnswer":
+        case "iceCandidate":
+        case "callBusy":
+        case "callRejected":
+          forwardMessage(messageData, ws);
+          break;
+        case "endCall":
+          handleEndCall(messageData, ws);
+          break;
+      }
+    } catch (error) {
+      console.error("Error handling WS message:", error);
     }
   });
 
   ws.on("close", function () {
-    users.delete(userId);
-    broadcastUserList();
+    if (users.get(userId) === ws) {
+      users.delete(userId);
+      broadcastUserList();
+    }
   });
   broadcastUserList();
 });
 
 function handleChatMessage(messageData, ws) {
+  if (
+    typeof messageData.content !== "string" ||
+    messageData.content.trim().length === 0 ||
+    messageData.content.length > MAX_CHAT_MESSAGE_LENGTH
+  ) {
+    return;
+  }
+
   wss.clients.forEach(function each(client) {
     if (client !== ws && client.readyState === WebSocket.OPEN) {
       client.send(
