@@ -36,6 +36,16 @@ export default function VideoCallOverlay({ inCall, localStream, remoteStream, ha
     setIsLoading(!remoteStream)
   }, [remoteStream])
 
+  // Reset controls state for each new call — otherwise a mute/video toggle
+  // from a previous call carries over into the next one, out of sync with
+  // the freshly-acquired (always-enabled) tracks.
+  useEffect(() => {
+    if (localStream) {
+      setIsMuted(false)
+      setIsVideoOff(false)
+    }
+  }, [localStream])
+
   useEffect(() => {
     logger.log('[VideoCallOverlay] remote stream effect', { hasEl: !!remoteVideoEl, hasStream: !!remoteStream })
     if (remoteVideoEl && remoteStream) {

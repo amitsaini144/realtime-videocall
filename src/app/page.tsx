@@ -46,7 +46,7 @@ export default function Home() {
 
   if (!currentUser || connectionState !== 'connected') {
     return (
-      <div className='relative flex flex-col min-h-screen bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
+      <div className='relative flex flex-col min-h-dvh bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
         <MovingCloudsBackground />
         <LoadingScreen
           message={currentUser ? 'Reconnecting to server...' : 'Connecting to server...'}
@@ -58,9 +58,9 @@ export default function Home() {
   const otherConnectedUsers = connectedUsers.filter(u => u.id !== currentUser.id);
 
   return (
-    <div className='relative flex flex-col min-h-screen bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
+    <div className='relative flex flex-col min-h-dvh bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
       <MovingCloudsBackground />
-      <div className='relative z-10 flex flex-col min-h-screen bg-white/10 backdrop-blur-[2px]'>
+      <div className='relative z-10 flex flex-col min-h-dvh bg-white/10 backdrop-blur-[2px]'>
         <Navbar userName={
           user?.username ||
           [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
@@ -85,7 +85,7 @@ export default function Home() {
               </motion.div>
             </div>
           ) : (
-            <div className='flex flex-col md:flex-row flex-grow min-h-0 gap-4 p-4 pb-4'>
+            <div className='flex flex-col md:flex-row flex-grow min-h-0 gap-4 p-4' style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
               <aside className='md:w-64 lg:w-72 flex-shrink-0'>
                 <div className='bg-white/15 backdrop-blur-2xl rounded-2xl p-4 border border-white/25 h-full'>
                   <p className='text-white/60 text-xs font-semibold uppercase tracking-widest mb-3'>

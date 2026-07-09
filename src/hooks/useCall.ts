@@ -4,6 +4,8 @@ import { logger } from '@/lib/logger';
 
 type ToastFn = (options: { description: string }) => void;
 
+const RING_TIMEOUT_MS = 30000;
+
 export interface IncomingCallData {
   from: string;
   fromUsername: string;
@@ -56,6 +58,11 @@ function useCall(
   // Only the original offerer re-offers on ICE restart, so both sides never
   // race to renegotiate at once.
   const isCallerRef = useRef(false);
+  // Guards against a call that's never answered — e.g. the offer got
+  // dropped by a race with the callee's disconnect, or their client just
+  // never responds. Cleared as soon as an answer/decline/callFailed comes
+  // in, or the call ends some other way.
+  const ringTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bumped on every hangup/decline and every new call attempt. In-flight
   // startCall/acceptCall promise chains capture the id at start and check it
   // after every await — if it no longer matches, this call was superseded
@@ -63,9 +70,17 @@ function useCall(
   // running) and the chain aborts instead of resurrecting stale state.
   const callGenerationRef = useRef(0);
 
+  const clearRingTimeout = useCallback(() => {
+    if (ringTimeoutRef.current) {
+      clearTimeout(ringTimeoutRef.current);
+      ringTimeoutRef.current = null;
+    }
+  }, []);
+
   const handleCallEnded = useCallback(() => {
     logger.log('[useCall] handleCallEnded: cleaning up local call state');
     callGenerationRef.current += 1;
+    clearRingTimeout();
     closePeerConnection();
     localStreamRef.current?.getTracks().forEach(track => track.stop());
     localStreamRef.current = null;
@@ -75,7 +90,7 @@ function useCall(
     setRemoteStream(null);
     setInCall(false);
     toast({ description: 'Call ended' });
-  }, [closePeerConnection, toast]);
+  }, [closePeerConnection, toast, clearRingTimeout]);
 
   const endCall = useCallback(() => {
     if (remoteUserIdRef.current) {
@@ -85,8 +100,9 @@ function useCall(
     handleCallEnded();
   }, [socketRef, handleCallEnded]);
 
-  const handleCallDeclined = useCallback((reason: 'busy' | 'rejected') => {
+  const handleCallDeclined = useCallback((reason: 'busy' | 'rejected' | 'unavailable' | 'no-answer') => {
     callGenerationRef.current += 1;
+    clearRingTimeout();
     closePeerConnection();
     localStreamRef.current?.getTracks().forEach(track => track.stop());
     localStreamRef.current = null;
@@ -95,8 +111,14 @@ function useCall(
     setLocalStream(null);
     setRemoteStream(null);
     setInCall(false);
-    toast({ description: reason === 'busy' ? 'User is busy' : 'Call declined' });
-  }, [closePeerConnection, toast]);
+    const messages = {
+      busy: 'User is busy',
+      rejected: 'Call declined',
+      unavailable: 'User is no longer available',
+      'no-answer': 'No answer',
+    };
+    toast({ description: messages[reason] });
+  }, [closePeerConnection, toast, clearRingTimeout]);
 
   // Aborts a stale call attempt: closes the peer connection this attempt
   // created (only if a newer generation hasn't already replaced it) and
@@ -207,11 +229,21 @@ function useCall(
 
       setInCall(true);
       logger.log('[useCall] startCall: inCall set true');
+
+      // If the callee's client never answers (offer lost to a race with
+      // their disconnect, they ignore the ring, etc.) don't leave the
+      // caller stuck on the connecting screen forever.
+      ringTimeoutRef.current = setTimeout(() => {
+        if (callGenerationRef.current === myGeneration) {
+          logger.log('[useCall] ring timeout: no answer received');
+          handleCallDeclined('no-answer');
+        }
+      }, RING_TIMEOUT_MS);
     } catch (error) {
       logger.error('Error starting call:', error);
       toast({ description: 'Failed to start call' });
     }
-  }, [inCall, incomingCall, socketRef, createPeerConnection, endCall, attemptIceRestart, abortStaleCall, toast]);
+  }, [inCall, incomingCall, socketRef, createPeerConnection, endCall, attemptIceRestart, abortStaleCall, toast, handleCallDeclined]);
 
   const acceptCall = useCallback(async () => {
     const data = pendingCallRef.current;
@@ -219,6 +251,10 @@ function useCall(
     setIncomingCall(null);
     pendingCallRef.current = null;
     const myGeneration = ++callGenerationRef.current;
+    // Show the in-call/connecting UI immediately so the callee isn't staring
+    // at the chat screen while getUserMedia/ICE negotiation runs in the
+    // background — otherwise the call just appears out of nowhere.
+    setInCall(true);
 
     let stream: MediaStream;
     try {
@@ -226,6 +262,9 @@ function useCall(
     } catch (error) {
       logger.error('Error accessing media devices:', error);
       toast({ description: 'Failed to access camera/microphone' });
+      if (callGenerationRef.current === myGeneration) {
+        setInCall(false);
+      }
       return;
     }
     if (callGenerationRef.current !== myGeneration) {
@@ -331,6 +370,7 @@ function useCall(
   }, [socketRef]);
 
   const handleCallAccepted = useCallback((data: { answer: RTCSessionDescriptionInit }) => {
+    clearRingTimeout();
     if (!peerConnectionRef.current) return;
     peerConnectionRef.current.setRemoteDescription(data.answer)
       .then(() => {
@@ -338,7 +378,7 @@ function useCall(
         addBufferedCandidates();
       })
       .catch(e => logger.error('Error setting remote description', e));
-  }, [peerConnectionRef, remoteDescriptionSet, addBufferedCandidates]);
+  }, [peerConnectionRef, remoteDescriptionSet, addBufferedCandidates, clearRingTimeout]);
 
   return {
     inCall,

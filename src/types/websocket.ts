@@ -10,6 +10,7 @@ export type InboundWsMessage =
   | { type: 'endCall';         from: string }
   | { type: 'callBusy';        from: string }
   | { type: 'callRejected';    from: string }
+  | { type: 'callFailed' }
   | { type: 'error';           content: string };
 
 export type OutboundWsMessage =

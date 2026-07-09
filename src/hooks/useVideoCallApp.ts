@@ -95,6 +95,9 @@ function useVideoCallApp(
       case 'callRejected':
         handleCallDeclined('rejected');
         break;
+      case 'callFailed':
+        handleCallDeclined('unavailable');
+        break;
     }
   }, [handleIncomingCall, handleCallAccepted, handleCallEnded, handleCallDeclined, handleNewICECandidate, handleIceRestartOffer, handleIceRestartAnswer]);
 

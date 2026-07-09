@@ -184,14 +184,16 @@ function forwardMessage(messageData, ws) {
         fromUsername: ws.username,
       })
     );
-  } else {
-    ws.send(
-      JSON.stringify({
-        type: "error",
-        content: "Target user not available",
-        originalMessage: messageData,
-      })
-    );
+    return;
+  }
+
+  // Target has disconnected (closed tab, lost network, etc). For call
+  // setup messages we need to actively tell the sender so they don't sit
+  // on a "Connecting..." screen forever waiting for a reply that will
+  // never come — non-critical messages (ICE candidates, restarts) are
+  // just dropped since the call is already being torn down another way.
+  if (messageData.type === "videoCallOffer" || messageData.type === "videoCallAnswer") {
+    ws.send(JSON.stringify({ type: "callFailed" }));
   }
 }
 
