@@ -16,7 +16,7 @@ const clerkClient = createClerkClient({
   secretKey: process.env.CLERK_SECRET_KEY,
 });
 
-const wss = new WebSocketServer({ server: httpServer, maxPayload: 64 * 1024 });
+const wss = new WebSocketServer({ server: httpServer, maxPayload: 5 * 1024 * 1024 });
 let users = new Map();
 
 const HEARTBEAT_INTERVAL_MS = 30000;
@@ -37,6 +37,10 @@ wss.on("close", () => clearInterval(heartbeatInterval));
 const RATE_LIMIT_WINDOW_MS = 5000;
 const RATE_LIMIT_MAX_MESSAGES = 60;
 const MAX_CHAT_MESSAGE_LENGTH = 2000;
+const MAX_MEDIA_DATA_LENGTH = 4 * 1024 * 1024;
+const MAX_EMOJI_LENGTH = 8;
+const MAX_REPLY_PREVIEW_LENGTH = 200;
+const MESSAGE_KINDS = new Set(['text', 'image', 'voice']);
 
 function isRateLimited(ws) {
   const now = Date.now();
@@ -124,6 +128,18 @@ wss.on("connection", async function connection(ws, req) {
         case "message":
           handleChatMessage(messageData, ws);
           break;
+        case "typing":
+          handleTyping(messageData, ws);
+          break;
+        case "reaction":
+          handleReaction(messageData, ws);
+          break;
+        case "edit":
+          handleEditMessage(messageData, ws);
+          break;
+        case "delete":
+          handleDeleteMessage(messageData, ws);
+          break;
         case "videoCallOffer":
         case "videoCallAnswer":
         case "iceCandidate":
@@ -152,7 +168,110 @@ wss.on("connection", async function connection(ws, req) {
 });
 
 function handleChatMessage(messageData, ws) {
+  if (typeof messageData.id !== "string" || messageData.id.length === 0 || messageData.id.length > 100) {
+    return;
+  }
+
+  const kind = MESSAGE_KINDS.has(messageData.kind) ? messageData.kind : "text";
+
+  if (kind === "text") {
+    if (
+      typeof messageData.content !== "string" ||
+      messageData.content.trim().length === 0 ||
+      messageData.content.length > MAX_CHAT_MESSAGE_LENGTH
+    ) {
+      return;
+    }
+  } else if (
+    typeof messageData.mediaData !== "string" ||
+    messageData.mediaData.length === 0 ||
+    messageData.mediaData.length > MAX_MEDIA_DATA_LENGTH ||
+    typeof messageData.mediaMimeType !== "string"
+  ) {
+    return;
+  }
+
+  const replyTo = isValidReplyTo(messageData.replyTo) ? messageData.replyTo : undefined;
+
+  wss.clients.forEach(function each(client) {
+    if (client !== ws && client.readyState === WebSocket.OPEN) {
+      client.send(
+        JSON.stringify({
+          type: "message",
+          id: messageData.id,
+          kind,
+          content: messageData.content,
+          mediaData: messageData.mediaData,
+          mediaMimeType: messageData.mediaMimeType,
+          durationSec: messageData.durationSec,
+          replyTo,
+          sender: ws.username,
+          senderImageUrl: ws.imageUrl,
+        })
+      );
+    }
+  });
+}
+
+function isValidReplyTo(replyTo) {
+  return (
+    replyTo &&
+    typeof replyTo.id === "string" &&
+    replyTo.id.length > 0 &&
+    replyTo.id.length <= 100 &&
+    typeof replyTo.sender === "string" &&
+    replyTo.sender.length <= 100 &&
+    typeof replyTo.preview === "string" &&
+    replyTo.preview.length <= MAX_REPLY_PREVIEW_LENGTH
+  );
+}
+
+function handleTyping(messageData, ws) {
+  if (typeof messageData.isTyping !== "boolean") return;
+
+  wss.clients.forEach(function each(client) {
+    if (client !== ws && client.readyState === WebSocket.OPEN) {
+      client.send(
+        JSON.stringify({
+          type: "typing",
+          sender: ws.username,
+          isTyping: messageData.isTyping,
+        })
+      );
+    }
+  });
+}
+
+function handleReaction(messageData, ws) {
   if (
+    typeof messageData.messageId !== "string" ||
+    messageData.messageId.length === 0 ||
+    typeof messageData.emoji !== "string" ||
+    messageData.emoji.length === 0 ||
+    messageData.emoji.length > MAX_EMOJI_LENGTH
+  ) {
+    return;
+  }
+
+  wss.clients.forEach(function each(client) {
+    if (client !== ws && client.readyState === WebSocket.OPEN) {
+      client.send(
+        JSON.stringify({
+          type: "reaction",
+          messageId: messageData.messageId,
+          emoji: messageData.emoji,
+          sender: ws.username,
+          remove: messageData.remove === true,
+        })
+      );
+    }
+  });
+}
+
+function handleEditMessage(messageData, ws) {
+  if (
+    typeof messageData.messageId !== "string" ||
+    messageData.messageId.length === 0 ||
     typeof messageData.content !== "string" ||
     messageData.content.trim().length === 0 ||
     messageData.content.length > MAX_CHAT_MESSAGE_LENGTH
@@ -164,10 +283,28 @@ function handleChatMessage(messageData, ws) {
     if (client !== ws && client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
-          type: "message",
+          type: "edit",
+          messageId: messageData.messageId,
           content: messageData.content,
           sender: ws.username,
-          senderImageUrl: ws.imageUrl,
+        })
+      );
+    }
+  });
+}
+
+function handleDeleteMessage(messageData, ws) {
+  if (typeof messageData.messageId !== "string" || messageData.messageId.length === 0) {
+    return;
+  }
+
+  wss.clients.forEach(function each(client) {
+    if (client !== ws && client.readyState === WebSocket.OPEN) {
+      client.send(
+        JSON.stringify({
+          type: "delete",
+          messageId: messageData.messageId,
+          sender: ws.username,
         })
       );
     }

@@ -1,10 +1,12 @@
 "use client"
 import { useUser, useAuth } from '@clerk/nextjs';
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useToast } from "@/components/ui/use-toast"
 import { motion } from 'framer-motion';
 import { Video } from 'lucide-react';
 import useVideoCallApp from '@/hooks/useVideoCallApp';
+import useUnfocusedTabNotifications from '@/hooks/useUnfocusedTabNotifications';
+import { ChatMessage } from '@/types';
 import Navbar from '@/components/layout/Navbar';
 import LoadingScreen from '@/components/layout/LoadingScreen';
 import MovingCloudsBackground from '@/components/background/MovingCloudsBackground';
@@ -33,8 +35,18 @@ export default function Home() {
     acceptCall,
     rejectCall,
     sendMessage,
+    sendImageMessage,
+    sendVoiceMessage,
+    sendReaction,
+    sendEditMessage,
+    sendDeleteMessage,
+    sendTyping,
+    typingUsers,
     connectionState,
   } = useVideoCallApp(user, getToken, toast);
+
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -43,6 +55,18 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom();
   }, [receivedMessages, scrollToBottom]);
+
+  useUnfocusedTabNotifications(receivedMessages);
+
+  const handleReply = useCallback((message: ChatMessage) => {
+    setEditingMessage(null);
+    setReplyingTo(message);
+  }, []);
+
+  const handleEdit = useCallback((message: ChatMessage) => {
+    setReplyingTo(null);
+    setEditingMessage(message);
+  }, []);
 
   if (!currentUser || connectionState !== 'connected') {
     return (
@@ -106,8 +130,28 @@ export default function Home() {
               </aside>
 
               <main className='flex flex-col flex-grow min-h-0'>
-                <MessageSection receivedMessages={receivedMessages} messagesEndRef={messagesEndRef} currentUser={currentUser} />
-                <MessageInput onSend={sendMessage} />
+                <MessageSection
+                  receivedMessages={receivedMessages}
+                  messagesEndRef={messagesEndRef}
+                  currentUser={currentUser}
+                  typingUsers={typingUsers}
+                  onReact={sendReaction}
+                  onReply={handleReply}
+                  onEdit={handleEdit}
+                  onDelete={sendDeleteMessage}
+                />
+                <MessageInput
+                  onSend={sendMessage}
+                  onSendImage={sendImageMessage}
+                  onSendVoice={sendVoiceMessage}
+                  onTyping={sendTyping}
+                  mentionCandidates={otherConnectedUsers.map(u => u.username).filter((name): name is string => !!name)}
+                  replyingTo={replyingTo}
+                  onCancelReply={() => setReplyingTo(null)}
+                  editingMessage={editingMessage}
+                  onCancelEdit={() => setEditingMessage(null)}
+                  onSaveEdit={sendEditMessage}
+                />
               </main>
             </div>
           )}
