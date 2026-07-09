@@ -19,53 +19,158 @@ function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
   });
 }
 
-function useCall(
-  socketRef: React.RefObject<WebSocket | null>,
-  peerConnectionRef: React.RefObject<RTCPeerConnection | null>,
-  remoteDescriptionSet: React.MutableRefObject<boolean>,
-  addBufferedCandidates: () => void,
+export interface PeerConnectionApi {
+  peerConnectionRef: React.MutableRefObject<RTCPeerConnection | null>;
+  remoteDescriptionSet: React.MutableRefObject<boolean>;
+  addBufferedCandidates: () => void;
   createPeerConnection: (
     onTrack: (stream: MediaStream) => void,
     onIceCandidate: (candidate: RTCIceCandidate) => void,
     onConnectionFailed: () => void,
-  ) => Promise<RTCPeerConnection>,
-  closePeerConnection: () => void,
+    onIceDisconnected: () => void,
+  ) => Promise<RTCPeerConnection>;
+  closePeerConnection: () => void;
+}
+
+function useCall(
+  socketRef: React.RefObject<WebSocket | null>,
+  peerConnection: PeerConnectionApi,
+  currentUserRef: React.RefObject<User | null>,
   toast: ToastFn,
 ) {
+  const {
+    peerConnectionRef,
+    remoteDescriptionSet,
+    addBufferedCandidates,
+    createPeerConnection,
+    closePeerConnection,
+  } = peerConnection;
   const [inCall, setInCall] = useState(false);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [incomingCall, setIncomingCall] = useState<IncomingCallData | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const pendingCallRef = useRef<IncomingCallData | null>(null);
+  const remoteUserIdRef = useRef<string | null>(null);
+  // True while we're the one who sent the original offer for the current call.
+  // Only the original offerer re-offers on ICE restart, so both sides never
+  // race to renegotiate at once.
+  const isCallerRef = useRef(false);
+  // Bumped on every hangup/decline and every new call attempt. In-flight
+  // startCall/acceptCall promise chains capture the id at start and check it
+  // after every await — if it no longer matches, this call was superseded
+  // (e.g. the user hung up while getUserMedia/ICE gathering was still
+  // running) and the chain aborts instead of resurrecting stale state.
+  const callGenerationRef = useRef(0);
 
   const handleCallEnded = useCallback(() => {
+    logger.log('[useCall] handleCallEnded: cleaning up local call state');
+    callGenerationRef.current += 1;
     closePeerConnection();
     localStreamRef.current?.getTracks().forEach(track => track.stop());
     localStreamRef.current = null;
+    remoteUserIdRef.current = null;
+    isCallerRef.current = false;
     setLocalStream(null);
     setRemoteStream(null);
     setInCall(false);
     toast({ description: 'Call ended' });
   }, [closePeerConnection, toast]);
 
+  const endCall = useCallback(() => {
+    if (remoteUserIdRef.current) {
+      logger.log('[useCall] endCall: notifying peer', remoteUserIdRef.current);
+      socketRef.current?.send(JSON.stringify({ type: 'endCall', to: remoteUserIdRef.current }));
+    }
+    handleCallEnded();
+  }, [socketRef, handleCallEnded]);
+
   const handleCallDeclined = useCallback((reason: 'busy' | 'rejected') => {
+    callGenerationRef.current += 1;
     closePeerConnection();
     localStreamRef.current?.getTracks().forEach(track => track.stop());
     localStreamRef.current = null;
+    remoteUserIdRef.current = null;
+    isCallerRef.current = false;
     setLocalStream(null);
     setRemoteStream(null);
     setInCall(false);
     toast({ description: reason === 'busy' ? 'User is busy' : 'Call declined' });
   }, [closePeerConnection, toast]);
 
+  // Aborts a stale call attempt: closes the peer connection this attempt
+  // created (only if a newer generation hasn't already replaced it) and
+  // stops the local media tracks it acquired.
+  const abortStaleCall = useCallback((stream: MediaStream, pc: RTCPeerConnection | null) => {
+    logger.log('[useCall] aborting stale call attempt (superseded by hangup or new call)');
+    pc?.close();
+    if (pc && peerConnectionRef.current === pc) {
+      peerConnectionRef.current = null;
+    }
+    stream.getTracks().forEach(track => track.stop());
+  }, [peerConnectionRef]);
+
+  // Re-offers on the existing peer connection when ICE drops (e.g. wifi/cell
+  // handoff, brief network blip). Only the original caller does this — the
+  // other side just waits for the incoming iceRestartOffer — so both sides
+  // never try to renegotiate at the same time.
+  const attemptIceRestart = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    const targetId = remoteUserIdRef.current;
+    if (!isCallerRef.current || !pc || !targetId) return;
+    try {
+      logger.log('[useCall] attempting ICE restart, offering to', targetId);
+      const offer = await pc.createOffer({ iceRestart: true });
+      await pc.setLocalDescription(offer);
+      socketRef.current?.send(JSON.stringify({
+        type: 'iceRestartOffer',
+        offer: pc.localDescription,
+        to: targetId,
+      }));
+    } catch (error) {
+      logger.error('Error attempting ICE restart:', error);
+    }
+  }, [peerConnectionRef, socketRef]);
+
+  const handleIceRestartOffer = useCallback((data: { offer: RTCSessionDescriptionInit; from: string }) => {
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
+    pc.setRemoteDescription(data.offer)
+      .then(() => pc.createAnswer())
+      .then(answer => pc.setLocalDescription(answer))
+      .then(() => {
+        logger.log('[useCall] answering ICE restart offer from', data.from);
+        socketRef.current?.send(JSON.stringify({
+          type: 'iceRestartAnswer',
+          answer: pc.localDescription,
+          to: data.from,
+        }));
+      })
+      .catch(e => logger.error('Error handling ICE restart offer:', e));
+  }, [peerConnectionRef, socketRef]);
+
+  const handleIceRestartAnswer = useCallback((data: { answer: RTCSessionDescriptionInit }) => {
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
+    pc.setRemoteDescription(data.answer)
+      .catch(e => logger.error('Error applying ICE restart answer:', e));
+  }, [peerConnectionRef]);
+
   const startCall = useCallback(async (targetUser: User) => {
-    if (inCall) return;
+    if (inCall || incomingCall) return;
+    const myGeneration = ++callGenerationRef.current;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      if (callGenerationRef.current !== myGeneration) {
+        abortStaleCall(stream, null);
+        return;
+      }
       localStreamRef.current = stream;
+      remoteUserIdRef.current = targetUser.id;
+      isCallerRef.current = true;
       setLocalStream(stream);
+      logger.log('[useCall] startCall: localStream set', stream.id);
 
       const pc = await createPeerConnection(
         (remStream) => setRemoteStream(remStream),
@@ -76,14 +181,23 @@ function useCall(
             to: targetUser.id,
           }));
         },
-        handleCallEnded,
+        endCall,
+        attemptIceRestart,
       );
+      if (callGenerationRef.current !== myGeneration) {
+        abortStaleCall(stream, pc);
+        return;
+      }
 
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       await waitForIceGathering(pc);
+      if (callGenerationRef.current !== myGeneration) {
+        abortStaleCall(stream, pc);
+        return;
+      }
 
       socketRef.current?.send(JSON.stringify({
         type: 'videoCallOffer',
@@ -92,78 +206,120 @@ function useCall(
       }));
 
       setInCall(true);
+      logger.log('[useCall] startCall: inCall set true');
     } catch (error) {
       logger.error('Error starting call:', error);
       toast({ description: 'Failed to start call' });
     }
-  }, [inCall, socketRef, createPeerConnection, handleCallEnded, toast]);
+  }, [inCall, incomingCall, socketRef, createPeerConnection, endCall, attemptIceRestart, abortStaleCall, toast]);
+
+  const acceptCall = useCallback(async () => {
+    const data = pendingCallRef.current;
+    if (!data) return;
+    setIncomingCall(null);
+    pendingCallRef.current = null;
+    const myGeneration = ++callGenerationRef.current;
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    } catch (error) {
+      logger.error('Error accessing media devices:', error);
+      toast({ description: 'Failed to access camera/microphone' });
+      return;
+    }
+    if (callGenerationRef.current !== myGeneration) {
+      abortStaleCall(stream, null);
+      return;
+    }
+    localStreamRef.current = stream;
+    remoteUserIdRef.current = data.from;
+    isCallerRef.current = false;
+    setLocalStream(stream);
+    logger.log('[useCall] acceptCall: localStream set', stream.id);
+
+    try {
+      const pc = await createPeerConnection(
+        (remStream) => setRemoteStream(remStream),
+        (candidate) => {
+          socketRef.current?.send(JSON.stringify({
+            type: 'iceCandidate',
+            candidate,
+            to: data.from,
+          }));
+        },
+        endCall,
+        attemptIceRestart,
+      );
+      if (callGenerationRef.current !== myGeneration) {
+        abortStaleCall(stream, pc);
+        return;
+      }
+
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      await pc.setRemoteDescription(data.offer);
+      remoteDescriptionSet.current = true;
+      addBufferedCandidates();
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await waitForIceGathering(pc);
+      if (callGenerationRef.current !== myGeneration) {
+        abortStaleCall(stream, pc);
+        return;
+      }
+
+      socketRef.current?.send(JSON.stringify({
+        type: 'videoCallAnswer',
+        answer: pc.localDescription,
+        to: data.from,
+      }));
+
+      setInCall(true);
+      logger.log('[useCall] acceptCall: inCall set true');
+    } catch (error) {
+      logger.error('Error handling incoming call offer:', error);
+      toast({ description: 'Failed to connect call' });
+      if (callGenerationRef.current === myGeneration) {
+        closePeerConnection();
+        localStreamRef.current?.getTracks().forEach(track => track.stop());
+        localStreamRef.current = null;
+        remoteUserIdRef.current = null;
+        isCallerRef.current = false;
+        setLocalStream(null);
+        setInCall(false);
+      } else {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    }
+  }, [socketRef, createPeerConnection, endCall, attemptIceRestart, remoteDescriptionSet, addBufferedCandidates, closePeerConnection, abortStaleCall, toast]);
 
   const handleIncomingCall = useCallback((data: IncomingCallData) => {
     if (inCall) {
       socketRef.current?.send(JSON.stringify({ type: 'callBusy', to: data.from }));
       return;
     }
+
+    if (remoteUserIdRef.current === data.from) {
+      // Glare: both users called each other at essentially the same moment.
+      // Resolve deterministically so exactly one connection survives instead
+      // of each side building its own competing peer connection.
+      const myId = currentUserRef.current?.id;
+      const iBackOff = !!myId && myId < data.from;
+      if (!iBackOff) {
+        logger.log('[useCall] glare detected: keeping my own outgoing call, ignoring offer from', data.from);
+        return;
+      }
+      logger.log('[useCall] glare detected: backing off, accepting incoming offer from', data.from);
+      pendingCallRef.current = data;
+      acceptCall();
+      return;
+    }
+
     pendingCallRef.current = data;
     setIncomingCall(data);
-  }, [inCall, socketRef]);
-
-  const acceptCall = useCallback(() => {
-    const data = pendingCallRef.current;
-    if (!data) return;
-    setIncomingCall(null);
-    pendingCallRef.current = null;
-
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      .then(async stream => {
-        localStreamRef.current = stream;
-        setLocalStream(stream);
-
-        const pc = await createPeerConnection(
-          (remStream) => setRemoteStream(remStream),
-          (candidate) => {
-            socketRef.current?.send(JSON.stringify({
-              type: 'iceCandidate',
-              candidate,
-              to: data.from,
-            }));
-          },
-          handleCallEnded,
-        );
-
-        stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-        pc.setRemoteDescription(data.offer)
-          .then(() => {
-            remoteDescriptionSet.current = true;
-            addBufferedCandidates();
-            return pc.createAnswer();
-          })
-          .then(answer => pc.setLocalDescription(answer))
-          .then(() => waitForIceGathering(pc))
-          .then(() => {
-            socketRef.current?.send(JSON.stringify({
-              type: 'videoCallAnswer',
-              answer: pc.localDescription,
-              to: data.from,
-            }));
-          })
-          .catch(error => {
-            logger.error('Error handling incoming call offer:', error);
-            toast({ description: 'Failed to connect call' });
-            closePeerConnection();
-            localStreamRef.current?.getTracks().forEach(track => track.stop());
-            localStreamRef.current = null;
-            setLocalStream(null);
-            setInCall(false);
-          });
-
-        setInCall(true);
-      })
-      .catch(error => {
-        logger.error('Error accessing media devices:', error);
-        toast({ description: 'Failed to access camera/microphone' });
-      });
-  }, [socketRef, createPeerConnection, handleCallEnded, remoteDescriptionSet, addBufferedCandidates, closePeerConnection, toast]);
+  }, [inCall, socketRef, currentUserRef, acceptCall]);
 
   const rejectCall = useCallback(() => {
     const data = pendingCallRef.current;
@@ -196,6 +352,9 @@ function useCall(
     handleCallAccepted,
     handleCallEnded,
     handleCallDeclined,
+    handleIceRestartOffer,
+    handleIceRestartAnswer,
+    endCall,
   };
 }
 

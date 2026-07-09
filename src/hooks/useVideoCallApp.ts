@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { UserResource } from '@clerk/types';
 import { User, ChatMessage, InboundWsMessage } from '@/types';
 import useWebSocketConnection from './useWebSocketConnection';
@@ -48,13 +48,13 @@ function useVideoCallApp(
     handleCallAccepted,
     handleCallEnded,
     handleCallDeclined,
+    handleIceRestartOffer,
+    handleIceRestartAnswer,
+    endCall,
   } = useCall(
     socketRef,
-    peerConnectionRef,
-    remoteDescriptionSet,
-    addBufferedCandidates,
-    createPeerConnection,
-    closePeerConnection,
+    { peerConnectionRef, remoteDescriptionSet, addBufferedCandidates, createPeerConnection, closePeerConnection },
+    currentUserRef,
     toast,
   );
 
@@ -80,6 +80,12 @@ function useVideoCallApp(
       case 'iceCandidate':
         handleNewICECandidate(data);
         break;
+      case 'iceRestartOffer':
+        handleIceRestartOffer(data);
+        break;
+      case 'iceRestartAnswer':
+        handleIceRestartAnswer(data);
+        break;
       case 'endCall':
         handleCallEnded();
         break;
@@ -90,7 +96,20 @@ function useVideoCallApp(
         handleCallDeclined('rejected');
         break;
     }
-  }, [handleIncomingCall, handleCallAccepted, handleCallEnded, handleCallDeclined, handleNewICECandidate]);
+  }, [handleIncomingCall, handleCallAccepted, handleCallEnded, handleCallDeclined, handleNewICECandidate, handleIceRestartOffer, handleIceRestartAnswer]);
+
+  // Notify the peer immediately if the tab is closed/refreshed mid-call,
+  // instead of leaving them stuck on the call screen until their own
+  // connection eventually times out.
+  useEffect(() => {
+    const handleUnload = () => endCall();
+    window.addEventListener('pagehide', handleUnload);
+    window.addEventListener('beforeunload', handleUnload);
+    return () => {
+      window.removeEventListener('pagehide', handleUnload);
+      window.removeEventListener('beforeunload', handleUnload);
+    };
+  }, [endCall]);
 
   const displayName = user?.username ?? user?.firstName ?? user?.emailAddresses[0]?.emailAddress ?? 'Unknown';
 
@@ -126,6 +145,7 @@ function useVideoCallApp(
     acceptCall,
     rejectCall,
     handleCallEnded,
+    endCall,
     sendMessage,
   };
 }

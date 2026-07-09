@@ -127,6 +127,8 @@ wss.on("connection", async function connection(ws, req) {
         case "videoCallOffer":
         case "videoCallAnswer":
         case "iceCandidate":
+        case "iceRestartOffer":
+        case "iceRestartAnswer":
         case "callBusy":
         case "callRejected":
           forwardMessage(messageData, ws);

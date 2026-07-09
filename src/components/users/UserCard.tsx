@@ -10,12 +10,18 @@ interface UserCardProps {
   userName: string;
   imageUrl?: string | null;
   onClick: () => void;
+  // True when the local user is already in a call or has an incoming call
+  // pending — blocks starting another call regardless of which card is
+  // clicked, preventing overlapping call attempts.
+  disabled?: boolean;
 }
 
-export default function UserCard({ userName, imageUrl, onClick }: Readonly<UserCardProps>) {
+export default function UserCard({ userName, imageUrl, onClick, disabled = false }: Readonly<UserCardProps>) {
   const [isCalling, setIsCalling] = useState(false);
+  const isDisabled = disabled || isCalling;
 
   const handleClick = () => {
+    if (isDisabled) return;
     setIsCalling(true);
     onClick();
     setTimeout(() => setIsCalling(false), 5000);
@@ -49,12 +55,12 @@ export default function UserCard({ userName, imageUrl, onClick }: Readonly<UserC
       <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.1 }}>
         <Button
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-medium h-auto ${
-            isCalling
+            isDisabled
               ? 'bg-gray-300 cursor-not-allowed hover:bg-gray-300'
               : 'bg-brand hover:bg-brand/80'
           }`}
           onClick={handleClick}
-          disabled={isCalling}
+          disabled={isDisabled}
         >
           <Video className="h-3.5 w-3.5" />
           {isCalling ? 'Calling...' : 'Call'}

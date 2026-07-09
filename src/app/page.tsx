@@ -25,7 +25,7 @@ export default function Home() {
     currentUser,
     receivedMessages,
     startCall,
-    handleCallEnded,
+    endCall,
     localStream,
     remoteStream,
     inCall,
@@ -93,7 +93,13 @@ export default function Home() {
                   </p>
                   <div className='flex flex-row md:flex-col gap-3 flex-wrap md:flex-nowrap'>
                     {otherConnectedUsers.map((u) => (
-                      <UserCard key={u.id} userName={u.username || 'Unknown'} imageUrl={u.imageUrl} onClick={() => startCall(u)} />
+                      <UserCard
+                        key={u.id}
+                        userName={u.username || 'Unknown'}
+                        imageUrl={u.imageUrl}
+                        onClick={() => startCall(u)}
+                        disabled={inCall || !!incomingCall}
+                      />
                     ))}
                   </div>
                 </div>
@@ -108,7 +114,7 @@ export default function Home() {
         </div>
       </div>
 
-      <VideoCallOverlay inCall={inCall} localStream={localStream} remoteStream={remoteStream} handleCallEnded={handleCallEnded} />
+      <VideoCallOverlay inCall={inCall} localStream={localStream} remoteStream={remoteStream} handleCallEnded={endCall} />
       {incomingCall && (
         <IncomingCallDialog
           callerName={incomingCall.fromUsername}

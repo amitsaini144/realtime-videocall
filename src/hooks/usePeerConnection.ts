@@ -34,12 +34,13 @@ function usePeerConnection() {
       onTrack: (stream: MediaStream) => void,
       onIceCandidate: (candidate: RTCIceCandidate) => void,
       onConnectionFailed: () => void,
+      onIceDisconnected: () => void,
     ): Promise<RTCPeerConnection> => {
       const config = await getRtcConfiguration();
       const pc = new RTCPeerConnection(config);
 
       pc.ontrack = (event) => {
-        logger.log(`ontrack fired: streams=${event.streams.length}, track kind=${event.track.kind}`);
+        logger.log(`[usePeerConnection] ontrack fired: streams=${event.streams.length}, track kind=${event.track.kind}, streamId=${event.streams[0]?.id}`);
         onTrack(event.streams[0]);
       };
 
@@ -53,7 +54,7 @@ function usePeerConnection() {
           const now = Date.now();
           if (now - lastIceRestartRef.current > ICE_RESTART_MIN_INTERVAL_MS) {
             lastIceRestartRef.current = now;
-            pc.restartIce();
+            onIceDisconnected();
           }
         }
       };
@@ -70,6 +71,7 @@ function usePeerConnection() {
       peerConnectionRef.current = pc;
       remoteDescriptionSet.current = false;
       lastIceRestartRef.current = 0;
+      iceCandidateBuffer.current = [];
       return pc;
     },
     [],

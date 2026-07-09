@@ -1,6 +1,7 @@
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Mic, MicOff, Video, VideoOff, Phone } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 interface VideoCallOverlayProps {
   inCall: boolean;
@@ -10,27 +11,37 @@ interface VideoCallOverlayProps {
 }
 
 export default function VideoCallOverlay({ inCall, localStream, remoteStream, handleCallEnded }: Readonly<VideoCallOverlayProps>) {
-  const localVideoRef = useRef<HTMLVideoElement>(null)
-  const remoteVideoRef = useRef<HTMLVideoElement>(null)
+  const [localVideoEl, setLocalVideoEl] = useState<HTMLVideoElement | null>(null)
+  const [remoteVideoEl, setRemoteVideoEl] = useState<HTMLVideoElement | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isMuted, setIsMuted] = useState(false)
   const [isVideoOff, setIsVideoOff] = useState(false)
 
+  const localVideoRef = useCallback((el: HTMLVideoElement | null) => {
+    setLocalVideoEl(el)
+  }, [])
+
+  const remoteVideoRef = useCallback((el: HTMLVideoElement | null) => {
+    setRemoteVideoEl(el)
+  }, [])
+
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream
+    logger.log('[VideoCallOverlay] local stream effect', { hasEl: !!localVideoEl, hasStream: !!localStream })
+    if (localVideoEl && localStream) {
+      localVideoEl.srcObject = localStream
     }
-  }, [localStream])
+  }, [localVideoEl, localStream])
 
   useEffect(() => {
     setIsLoading(!remoteStream)
   }, [remoteStream])
 
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream
+    logger.log('[VideoCallOverlay] remote stream effect', { hasEl: !!remoteVideoEl, hasStream: !!remoteStream })
+    if (remoteVideoEl && remoteStream) {
+      remoteVideoEl.srcObject = remoteStream
     }
-  }, [remoteStream, isLoading])
+  }, [remoteVideoEl, remoteStream])
 
   const toggleMute = () => {
     if (localStream) {
@@ -61,7 +72,7 @@ export default function VideoCallOverlay({ inCall, localStream, remoteStream, ha
             ref={remoteVideoRef}
             autoPlay
             playsInline
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain"
           >
             <track kind="captions" />
           </video>
@@ -90,9 +101,9 @@ export default function VideoCallOverlay({ inCall, localStream, remoteStream, ha
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3 }}
-            className="absolute bottom-24 right-4 w-36 md:w-48 aspect-video rounded-xl overflow-hidden shadow-2xl border border-white/20"
+            className="absolute bottom-24 right-4 w-28 aspect-[3/4] md:w-48 md:aspect-video rounded-xl overflow-hidden shadow-2xl border border-white/20"
           >
-            <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-contain -scale-x-100" />
             <div className="absolute bottom-0 inset-x-0 bg-black/40 text-white text-[10px] text-center py-0.5 font-medium">
               You
             </div>
