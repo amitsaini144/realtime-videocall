@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { MessageSquare, SmilePlus, Reply, Pencil, Trash2 } from 'lucide-react';
 import { User, ChatMessage } from "@/types";
-import { renderRichText, messageMentionsUser } from '@/lib/richText';
+import { renderRichText, messageMentionsUser } from '@/lib/chat/richText';
 import VoiceMessagePlayer from './VoiceMessagePlayer';
 import ReactionPicker from './ReactionPicker';
 

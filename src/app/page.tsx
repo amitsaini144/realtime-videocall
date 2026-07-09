@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { Video } from 'lucide-react';
 import useVideoCallApp from '@/hooks/useVideoCallApp';
 import useUnfocusedTabNotifications from '@/hooks/useUnfocusedTabNotifications';
+import { getDisplayName } from '@/lib/user';
 import { ChatMessage } from '@/types';
 import Navbar from '@/components/layout/Navbar';
 import LoadingScreen from '@/components/layout/LoadingScreen';
@@ -85,12 +86,7 @@ export default function Home() {
     <div className='relative flex flex-col min-h-dvh bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
       <MovingCloudsBackground />
       <div className='relative z-10 flex flex-col min-h-dvh bg-white/10 backdrop-blur-[2px]'>
-        <Navbar userName={
-          user?.username ||
-          [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
-          user?.emailAddresses[0]?.emailAddress ||
-          'Unknown'
-        } />
+        <Navbar userName={getDisplayName(user)} />
 
         <div className='flex flex-col flex-grow pt-16'>
           {otherConnectedUsers.length === 0 ? (

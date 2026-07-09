@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { getRtcConfiguration } from '@/lib/rtcConfig';
+import { getRtcConfiguration } from '@/lib/webrtc/rtcConfig';
 import { logger } from '@/lib/logger';
 
 const ICE_RESTART_MIN_INTERVAL_MS = 5000;

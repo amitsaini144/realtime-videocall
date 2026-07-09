@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react';
-import { EMOJI_GROUPS } from '@/lib/emojis';
+import { EMOJI_GROUPS } from '@/lib/chat/emojis';
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;

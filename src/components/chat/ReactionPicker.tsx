@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react';
-import { QUICK_REACTIONS } from '@/lib/emojis';
+import { QUICK_REACTIONS } from '@/lib/chat/emojis';
 
 interface ReactionPickerProps {
   align: 'left' | 'right';

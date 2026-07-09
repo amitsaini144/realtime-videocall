@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { SendHorizontal, Smile, Mic, Square, ImagePlus, X, Reply, Pencil } from 'lucide-react';
-import { fileToResizedBase64, blobToBase64 } from '@/lib/media';
+import { fileToResizedBase64, blobToBase64 } from '@/lib/chat/media';
 import useVoiceRecorder from '@/hooks/useVoiceRecorder';
 import { ChatMessage } from '@/types';
 import EmojiPicker from './EmojiPicker';
