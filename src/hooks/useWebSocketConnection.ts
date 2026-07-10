@@ -1,30 +1,38 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { UserResource } from '@clerk/types';
 import { logger } from '@/lib/logger';
+import { Identity } from './useIdentity';
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
 
 function useWebSocketConnection(
-  user: UserResource | null | undefined,
-  getToken: (options?: { skipCache?: boolean }) => Promise<string | null>,
+  identity: Identity,
   onMessageRef: React.MutableRefObject<(event: MessageEvent) => void>,
+  roomId: string,
 ) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connectWebSocket = useCallback(async () => {
-    if (!user || socketRef.current) return;
+    if (!roomId || socketRef.current) return;
+    if (identity.mode !== 'clerk' && identity.mode !== 'guest') return;
 
     setConnectionState('connecting');
 
     try {
-      const token = await getToken({ skipCache: true });
+      const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
+      let wsUrl: string;
+
+      if (identity.mode === 'clerk') {
+        const token = await identity.getToken({ skipCache: true });
+        wsUrl = `${WS_URL}?token=${token}&room=${encodeURIComponent(roomId)}`;
+      } else {
+        wsUrl = `${WS_URL}?guestId=${encodeURIComponent(identity.guestId)}&guestName=${encodeURIComponent(identity.displayName)}&room=${encodeURIComponent(roomId)}`;
+      }
 
       if (socketRef.current) return;
 
-      const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
-      const ws = new WebSocket(`${WS_URL}?token=${token}`);
+      const ws = new WebSocket(wsUrl);
       socketRef.current = ws;
 
       ws.onopen = () => {
@@ -47,7 +55,7 @@ function useWebSocketConnection(
       logger.error('WebSocket connection failed:', error);
       setConnectionState('disconnected');
     }
-  }, [user, getToken, onMessageRef]);
+  }, [identity, onMessageRef, roomId]);
 
   useEffect(() => {
     connectWebSocket();

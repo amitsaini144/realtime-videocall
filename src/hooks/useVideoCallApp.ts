@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { UserResource } from '@clerk/types';
 import { User, InboundWsMessage } from '@/types';
-import { getDisplayName } from '@/lib/user';
 import useWebSocketConnection from './useWebSocketConnection';
 import usePeerConnection from './usePeerConnection';
 import useCall from './useCall';
 import useChatMessages from './useChatMessages';
+import { Identity } from './useIdentity';
 
 type ToastFn = (options: { description: string }) => void;
 
 function useVideoCallApp(
-  user: UserResource | null | undefined,
-  getToken: (options?: { skipCache?: boolean }) => Promise<string | null>,
+  identity: Identity,
   toast: ToastFn,
+  roomId: string,
 ) {
   const [connectedUsers, setConnectedUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -35,9 +34,9 @@ function useVideoCallApp(
   // without requiring reconnection when those callbacks change.
   const onMessageRef = useRef<(event: MessageEvent) => void>(() => {});
 
-  const { socketRef, connectionState } = useWebSocketConnection(user, getToken, onMessageRef);
+  const { socketRef, connectionState } = useWebSocketConnection(identity, onMessageRef, roomId);
 
-  const displayName = getDisplayName(user);
+  const displayName = identity.mode === 'clerk' || identity.mode === 'guest' ? identity.displayName : '';
 
   const {
     receivedMessages,

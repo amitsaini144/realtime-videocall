@@ -1,169 +1,144 @@
 "use client"
-import { useUser, useAuth } from '@clerk/nextjs';
-import { useEffect, useRef, useCallback, useState } from 'react'
-import { useToast } from "@/components/ui/use-toast"
+import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { SignInButton } from '@clerk/nextjs';
 import { motion } from 'framer-motion';
-import { Video } from 'lucide-react';
-import useVideoCallApp from '@/hooks/useVideoCallApp';
-import useUnfocusedTabNotifications from '@/hooks/useUnfocusedTabNotifications';
-import { getDisplayName } from '@/lib/user';
-import { ChatMessage } from '@/types';
+import { Video, ArrowRight, UserRound } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import LoadingScreen from '@/components/layout/LoadingScreen';
 import MovingCloudsBackground from '@/components/background/MovingCloudsBackground';
-import UserCard from '@/components/users/UserCard';
-import MessageSection from '@/components/chat/MessageSection';
-import MessageInput from '@/components/chat/MessageInput';
-import VideoCallOverlay from '@/components/call/VideoCallOverlay';
-import IncomingCallDialog from '@/components/call/IncomingCallDialog';
+import { generateRoomId, normalizeRoomInput } from '@/lib/room';
+import { getOrCreateGuestIdentity } from '@/lib/guest';
+import useIdentity from '@/hooks/useIdentity';
 
 export default function Home() {
-  const { user } = useUser();
-  const { getToken } = useAuth();
-  const { toast } = useToast();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const identity = useIdentity();
+  const router = useRouter();
+  const [joinCode, setJoinCode] = useState('');
 
-  const {
-    connectedUsers,
-    currentUser,
-    receivedMessages,
-    startCall,
-    endCall,
-    localStream,
-    remoteStream,
-    inCall,
-    incomingCall,
-    acceptCall,
-    rejectCall,
-    sendMessage,
-    sendImageMessage,
-    sendVoiceMessage,
-    sendReaction,
-    sendEditMessage,
-    sendDeleteMessage,
-    sendTyping,
-    typingUsers,
-    connectionState,
-  } = useVideoCallApp(user, getToken, toast);
+  const handleNewRoom = useCallback(() => {
+    router.push(`/room/${generateRoomId()}`);
+  }, [router]);
 
-  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
-  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
+  const handleJoinRoom = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    const roomId = normalizeRoomInput(joinCode);
+    if (!roomId) return;
+    router.push(`/room/${roomId}`);
+  }, [joinCode, router]);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, []);
+  const handleContinueAsGuest = useCallback(() => {
+    getOrCreateGuestIdentity();
+    if (identity.mode === 'anonymous') identity.refresh();
+  }, [identity]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [receivedMessages, scrollToBottom]);
-
-  useUnfocusedTabNotifications(receivedMessages);
-
-  const handleReply = useCallback((message: ChatMessage) => {
-    setEditingMessage(null);
-    setReplyingTo(message);
-  }, []);
-
-  const handleEdit = useCallback((message: ChatMessage) => {
-    setReplyingTo(null);
-    setEditingMessage(message);
-  }, []);
-
-  if (!currentUser || connectionState !== 'connected') {
+  if (identity.mode === 'loading') {
     return (
       <div className='relative flex flex-col h-dvh overflow-hidden bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
         <MovingCloudsBackground />
-        <LoadingScreen
-          message={currentUser ? 'Reconnecting to server...' : 'Connecting to server...'}
-        />
+        <LoadingScreen message='Loading...' />
       </div>
     );
   }
 
-  const otherConnectedUsers = connectedUsers.filter(u => u.id !== currentUser.id);
-  const mentionCandidates = otherConnectedUsers.map(u => u.username).filter((name): name is string => !!name);
+  if (identity.mode === 'anonymous') {
+    return (
+      <div className='relative flex flex-col h-dvh overflow-hidden bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
+        <MovingCloudsBackground />
+        <div className='relative z-10 flex flex-grow flex-col items-center justify-center px-4'>
+          <motion.div
+            className='w-full max-w-md flex flex-col items-center gap-6 text-white'
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, ease: 'easeInOut' }}
+          >
+            <div className='bg-white/20 p-4 rounded-2xl'>
+              <Video className='h-10 w-10 text-white' />
+            </div>
+            <div className='text-center'>
+              <p className='text-2xl font-semibold'>Welcome to PeerLink</p>
+              <p className='text-white/60 text-sm mt-1'>Sign in for a saved identity, or jump straight in as a guest</p>
+            </div>
+
+            <SignInButton mode='modal'>
+              <button className='w-full flex items-center justify-center gap-2 bg-white text-sky-700 font-semibold px-5 py-3 rounded-xl hover:bg-white/90 transition-colors'>
+                Continue with Google
+              </button>
+            </SignInButton>
+
+            <div className='w-full flex items-center gap-3 text-white/50 text-xs uppercase tracking-widest'>
+              <div className='flex-grow h-px bg-white/20' />
+              or
+              <div className='flex-grow h-px bg-white/20' />
+            </div>
+
+            <button
+              onClick={handleContinueAsGuest}
+              className='w-full flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 transition-colors text-white font-semibold px-5 py-3 rounded-xl'
+            >
+              <UserRound className='h-5 w-5' />
+              Continue as Guest
+            </button>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className='relative flex flex-col h-dvh overflow-hidden bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
       <MovingCloudsBackground />
       <div className='relative z-10 flex flex-col h-dvh overflow-hidden bg-white/10 backdrop-blur-[2px]'>
-        <Navbar userName={getDisplayName(user)} />
+        <Navbar userName={identity.displayName} isGuest={identity.mode === 'guest'} />
 
-        <div className='flex flex-col flex-grow min-h-0 pt-16'>
-          {otherConnectedUsers.length === 0 ? (
-            <div className='flex flex-grow items-center justify-center'>
-              <motion.div
-                className='flex flex-col items-center gap-3 text-white'
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, ease: 'easeInOut' }}
+        <div className='flex flex-grow items-center justify-center pt-16 px-4'>
+          <motion.div
+            className='w-full max-w-md flex flex-col items-center gap-6 text-white'
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, ease: 'easeInOut' }}
+          >
+            <div className='bg-white/20 p-4 rounded-2xl'>
+              <Video className='h-10 w-10 text-white' />
+            </div>
+            <div className='text-center'>
+              <p className='text-2xl font-semibold'>Start a room</p>
+              <p className='text-white/60 text-sm mt-1'>Create a private room and share the link to invite others</p>
+            </div>
+
+            <button
+              onClick={handleNewRoom}
+              className='w-full flex items-center justify-center gap-2 bg-white text-sky-700 font-semibold px-5 py-3 rounded-xl hover:bg-white/90 transition-colors'
+            >
+              <Video className='h-5 w-5' />
+              New Room
+            </button>
+
+            <div className='w-full flex items-center gap-3 text-white/50 text-xs uppercase tracking-widest'>
+              <div className='flex-grow h-px bg-white/20' />
+              or
+              <div className='flex-grow h-px bg-white/20' />
+            </div>
+
+            <form onSubmit={handleJoinRoom} className='w-full flex gap-2'>
+              <input
+                type='text'
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                placeholder='Enter a code or link'
+                className='flex-grow bg-white/15 border border-white/25 placeholder:text-white/50 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-white/40'
+              />
+              <button
+                type='submit'
+                disabled={!joinCode.trim()}
+                className='flex items-center justify-center bg-white/20 hover:bg-white/30 disabled:opacity-40 disabled:hover:bg-white/20 transition-colors rounded-xl px-4'
               >
-                <div className='bg-white/20 p-4 rounded-2xl'>
-                  <Video className='h-10 w-10 text-white' />
-                </div>
-                <p className='text-xl font-semibold'>No one else is here yet</p>
-                <p className='text-white/60 text-sm'>Share the app link to start a call</p>
-              </motion.div>
-            </div>
-          ) : (
-            <div className='flex flex-col md:flex-row flex-grow min-h-0 gap-4 p-4' style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
-              <aside className='md:w-64 lg:w-72 flex-shrink-0'>
-                <div className='bg-white/15 backdrop-blur-2xl rounded-2xl p-4 border border-white/25 h-full'>
-                  <p className='text-white/60 text-xs font-semibold uppercase tracking-widest mb-3'>
-                    Online — {otherConnectedUsers.length}
-                  </p>
-                  <div className='flex flex-row md:flex-col gap-3 flex-wrap md:flex-nowrap'>
-                    {otherConnectedUsers.map((u) => (
-                      <UserCard
-                        key={u.id}
-                        userName={u.username || 'Unknown'}
-                        imageUrl={u.imageUrl}
-                        onClick={() => startCall(u)}
-                        disabled={inCall || !!incomingCall}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </aside>
-
-              <main className='flex flex-col flex-grow min-h-0'>
-                <MessageSection
-                  receivedMessages={receivedMessages}
-                  messagesEndRef={messagesEndRef}
-                  currentUser={currentUser}
-                  typingUsers={typingUsers}
-                  mentionCandidates={mentionCandidates}
-                  onReact={sendReaction}
-                  onReply={handleReply}
-                  onEdit={handleEdit}
-                  onDelete={sendDeleteMessage}
-                />
-                <MessageInput
-                  onSend={sendMessage}
-                  onSendImage={sendImageMessage}
-                  onSendVoice={sendVoiceMessage}
-                  onTyping={sendTyping}
-                  mentionCandidates={mentionCandidates}
-                  replyingTo={replyingTo}
-                  onCancelReply={() => setReplyingTo(null)}
-                  editingMessage={editingMessage}
-                  onCancelEdit={() => setEditingMessage(null)}
-                  onSaveEdit={sendEditMessage}
-                />
-              </main>
-            </div>
-          )}
+                <ArrowRight className='h-5 w-5' />
+              </button>
+            </form>
+          </motion.div>
         </div>
       </div>
-
-      <VideoCallOverlay inCall={inCall} localStream={localStream} remoteStream={remoteStream} handleCallEnded={endCall} />
-      {incomingCall && (
-        <IncomingCallDialog
-          callerName={incomingCall.fromUsername}
-          onAccept={acceptCall}
-          onReject={rejectCall}
-        />
-      )}
     </div>
   );
 }

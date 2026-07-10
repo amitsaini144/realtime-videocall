@@ -1,12 +1,9 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
+// Not gated behind Clerk auth: guests (who have no Clerk session) need TURN
+// credentials too, and the gate never provided meaningful protection since
+// any Google account passes it for free.
 export async function GET() {
-  const { userId } = auth();
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   const turnUsername = process.env.TURN_USERNAME;
   const turnCredential = process.env.TURN_CREDENTIAL;
 

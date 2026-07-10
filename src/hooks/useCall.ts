@@ -93,10 +93,11 @@ function useCall(
   }, [closePeerConnection, toast, clearRingTimeout]);
 
   const endCall = useCallback(() => {
-    if (remoteUserIdRef.current) {
-      logger.log('[useCall] endCall: notifying peer', remoteUserIdRef.current);
-      socketRef.current?.send(JSON.stringify({ type: 'endCall', to: remoteUserIdRef.current }));
-    }
+    // Nothing to end (e.g. the beforeunload/pagehide handler fires on every
+    // reload regardless of call state) — skip the cleanup and toast.
+    if (!remoteUserIdRef.current) return;
+    logger.log('[useCall] endCall: notifying peer', remoteUserIdRef.current);
+    socketRef.current?.send(JSON.stringify({ type: 'endCall', to: remoteUserIdRef.current }));
     handleCallEnded();
   }, [socketRef, handleCallEnded]);
 

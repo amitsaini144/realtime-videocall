@@ -1,15 +1,16 @@
 'use client'
 
 import React from 'react';
-import { UserButton } from '@clerk/nextjs';
+import { UserButton, SignInButton } from '@clerk/nextjs';
 import { motion } from 'framer-motion';
 import { Video, User } from 'lucide-react';
 
 interface NavbarProps {
   userName: string;
+  isGuest?: boolean;
 }
 
-function Navbar({ userName }: Readonly<NavbarProps>) {
+function Navbar({ userName, isGuest }: Readonly<NavbarProps>) {
   return (
     <motion.nav
       className="fixed top-0 left-0 right-0 z-50 bg-white/10 backdrop-blur-md border-b border-white/20"
@@ -30,7 +31,20 @@ function Navbar({ userName }: Readonly<NavbarProps>) {
             <User className="h-4 w-4" />
             <span>{userName}</span>
           </div>
-          <UserButton />
+          {isGuest ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-white/80 bg-white/15 px-2.5 py-1 rounded-full">
+                Guest
+              </span>
+              <SignInButton mode="modal">
+                <button className="text-xs font-medium text-white/80 hover:text-white transition-colors underline underline-offset-2">
+                  Sign in
+                </button>
+              </SignInButton>
+            </div>
+          ) : (
+            <UserButton />
+          )}
         </div>
       </div>
     </motion.nav>

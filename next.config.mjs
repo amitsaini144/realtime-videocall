@@ -2,7 +2,7 @@ const ContentSecurityPolicy = `
   default-src 'self';
   script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev https://challenges.cloudflare.com;
   style-src 'self' 'unsafe-inline';
-  img-src 'self' data: blob: https://img.clerk.com https://images.clerk.dev;
+  img-src 'self' data: blob: https://img.clerk.com https://images.clerk.dev https://api.dicebear.com;
   font-src 'self' data:;
   connect-src 'self' https://*.clerk.accounts.dev https: wss:;
   frame-src 'self' https://*.clerk.accounts.dev https://challenges.cloudflare.com;
@@ -26,6 +26,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'img.clerk.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'api.dicebear.com',
       },
     ],
   },

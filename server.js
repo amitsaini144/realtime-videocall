@@ -17,7 +17,7 @@ const clerkClient = createClerkClient({
 });
 
 const wss = new WebSocketServer({ server: httpServer, maxPayload: 5 * 1024 * 1024 });
-let users = new Map();
+let rooms = new Map(); // roomId -> Map<userId, ws>
 
 const HEARTBEAT_INTERVAL_MS = 30000;
 
@@ -51,45 +51,81 @@ function isRateLimited(ws) {
   return ws.messageTimestamps.length > RATE_LIMIT_MAX_MESSAGES;
 }
 
+const GUEST_ID_PATTERN = /^[a-zA-Z0-9-]{8,64}$/;
+const MAX_GUEST_NAME_LENGTH = 40;
+
+function guestAvatarUrl(guestId) {
+  return `https://api.dicebear.com/9.x/thumbs/svg?seed=${encodeURIComponent(guestId)}`;
+}
+
 wss.on("connection", async function connection(ws, req) {
   const parameters = url.parse(req.url, true);
   const token = parameters.query.token;
+  const guestId = parameters.query.guestId;
+  const guestName = parameters.query.guestName;
+  const roomId = parameters.query.room;
 
-  if (!token) {
-    ws.close(1008, "Token required");
+  if (!roomId || typeof roomId !== "string" || roomId.length > 100) {
+    ws.close(1008, "Room required");
     return;
   }
 
-  let user;
-  try {
-    const sessionClaims = await clerkClient.verifyToken(token);
-    user = await clerkClient.users.getUser(sessionClaims.sub);
-  } catch (error) {
-    console.error("Token verification failed:", error);
-    ws.close(1008, "Invalid token");
+  let userId;
+  let displayName;
+  let imageUrl;
+
+  if (token) {
+    let user;
+    try {
+      const sessionClaims = await clerkClient.verifyToken(token);
+      user = await clerkClient.users.getUser(sessionClaims.sub);
+    } catch (error) {
+      console.error("Token verification failed:", error);
+      ws.close(1008, "Invalid token");
+      return;
+    }
+
+    const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ");
+    const externalName = [
+      user.externalAccounts[0]?.firstName,
+      user.externalAccounts[0]?.lastName,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    userId = user.id;
+    displayName =
+      user.username ||
+      fullName ||
+      externalName ||
+      user.emailAddresses[0]?.emailAddress ||
+      "Unknown";
+    imageUrl = user.imageUrl ?? null;
+  } else if (guestId && typeof guestId === "string" && GUEST_ID_PATTERN.test(guestId)) {
+    const sanitizedName =
+      typeof guestName === "string" ? guestName.trim().slice(0, MAX_GUEST_NAME_LENGTH) : "";
+
+    userId = `guest:${guestId}`;
+    displayName = sanitizedName || "Guest";
+    imageUrl = guestAvatarUrl(guestId);
+    ws.isGuest = true;
+  } else {
+    ws.close(1008, "Token or guest identity required");
     return;
   }
 
-  const userId = user.id;
-  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ");
-  const externalName = [
-    user.externalAccounts[0]?.firstName,
-    user.externalAccounts[0]?.lastName,
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const displayName =
-    user.username ||
-    fullName ||
-    externalName ||
-    user.emailAddresses[0]?.emailAddress ||
-    "Unknown";
-
-  users.set(userId, ws);
   ws.userId = userId;
+  ws.roomId = roomId;
   ws.username = displayName;
-  ws.imageUrl = user.imageUrl ?? null;
+  ws.imageUrl = imageUrl;
   ws.isAlive = true;
+
+  let room = rooms.get(roomId);
+  if (!room) {
+    room = new Map();
+    rooms.set(roomId, room);
+  }
+  room.set(userId, ws);
   ws.on("pong", () => {
     ws.isAlive = true;
   });
@@ -98,9 +134,9 @@ wss.on("connection", async function connection(ws, req) {
     JSON.stringify({
       type: "userData",
       user: {
-        id: user.id,
+        id: userId,
         username: displayName,
-        imageUrl: user.imageUrl ?? null,
+        imageUrl,
       },
     })
   );
@@ -159,12 +195,17 @@ wss.on("connection", async function connection(ws, req) {
   });
 
   ws.on("close", function () {
-    if (users.get(userId) === ws) {
-      users.delete(userId);
-      broadcastUserList();
+    const room = rooms.get(roomId);
+    if (room && room.get(userId) === ws) {
+      room.delete(userId);
+      if (room.size === 0) {
+        rooms.delete(roomId);
+      } else {
+        broadcastUserList(roomId);
+      }
     }
   });
-  broadcastUserList();
+  broadcastUserList(roomId);
 });
 
 function handleChatMessage(messageData, ws) {
@@ -193,7 +234,9 @@ function handleChatMessage(messageData, ws) {
 
   const replyTo = isValidReplyTo(messageData.replyTo) ? messageData.replyTo : undefined;
 
-  wss.clients.forEach(function each(client) {
+  const room = rooms.get(ws.roomId);
+  if (!room) return;
+  room.forEach(function each(client) {
     if (client !== ws && client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
@@ -229,7 +272,9 @@ function isValidReplyTo(replyTo) {
 function handleTyping(messageData, ws) {
   if (typeof messageData.isTyping !== "boolean") return;
 
-  wss.clients.forEach(function each(client) {
+  const room = rooms.get(ws.roomId);
+  if (!room) return;
+  room.forEach(function each(client) {
     if (client !== ws && client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
@@ -253,7 +298,9 @@ function handleReaction(messageData, ws) {
     return;
   }
 
-  wss.clients.forEach(function each(client) {
+  const room = rooms.get(ws.roomId);
+  if (!room) return;
+  room.forEach(function each(client) {
     if (client !== ws && client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
@@ -279,7 +326,9 @@ function handleEditMessage(messageData, ws) {
     return;
   }
 
-  wss.clients.forEach(function each(client) {
+  const room = rooms.get(ws.roomId);
+  if (!room) return;
+  room.forEach(function each(client) {
     if (client !== ws && client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
@@ -298,7 +347,9 @@ function handleDeleteMessage(messageData, ws) {
     return;
   }
 
-  wss.clients.forEach(function each(client) {
+  const room = rooms.get(ws.roomId);
+  if (!room) return;
+  room.forEach(function each(client) {
     if (client !== ws && client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
@@ -312,7 +363,8 @@ function handleDeleteMessage(messageData, ws) {
 }
 
 function forwardMessage(messageData, ws) {
-  const targetUser = users.get(messageData.to);
+  const room = rooms.get(ws.roomId);
+  const targetUser = room?.get(messageData.to);
   if (targetUser && targetUser.readyState === WebSocket.OPEN) {
     targetUser.send(
       JSON.stringify({
@@ -335,19 +387,22 @@ function forwardMessage(messageData, ws) {
 }
 
 function handleEndCall(messageData, ws) {
-  const targetUser = users.get(messageData.to);
+  const room = rooms.get(ws.roomId);
+  const targetUser = room?.get(messageData.to);
   if (targetUser && targetUser.readyState === WebSocket.OPEN) {
     targetUser.send(JSON.stringify({ type: "endCall", from: ws.userId }));
   }
 }
 
-function broadcastUserList() {
-  const userList = Array.from(users.entries()).map(([id, ws]) => ({
+function broadcastUserList(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+  const userList = Array.from(room.entries()).map(([id, ws]) => ({
     id,
     username: ws.username,
     imageUrl: ws.imageUrl,
   }));
-  wss.clients.forEach(function each(client) {
+  room.forEach(function each(client) {
     if (client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
