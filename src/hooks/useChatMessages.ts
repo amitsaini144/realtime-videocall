@@ -9,6 +9,27 @@ function buildReplyPreview(message: ChatMessage): string {
   return (message.content ?? '').slice(0, 100);
 }
 
+function applyReactionToMessage(
+  message: ChatMessage,
+  emoji: string,
+  sender: string,
+  remove: boolean,
+): ChatMessage {
+  const reactions = { ...message.reactions };
+  let users = reactions[emoji] ? [...reactions[emoji]] : [];
+  if (remove) {
+    users = users.filter(u => u !== sender);
+  } else if (!users.includes(sender)) {
+    users.push(sender);
+  }
+  if (users.length > 0) {
+    reactions[emoji] = users;
+  } else {
+    delete reactions[emoji];
+  }
+  return { ...message, reactions };
+}
+
 export type ChatWsMessage = Extract<
   InboundWsMessage,
   { type: 'message' | 'typing' | 'reaction' | 'edit' | 'delete' }
@@ -44,6 +65,7 @@ function useChatMessages(
           durationSec: data.durationSec,
           sender: data.sender,
           senderImageUrl: data.senderImageUrl,
+          replyTo: data.replyTo,
           isOwn: false,
         }]);
         break;
@@ -73,22 +95,11 @@ function useChatMessages(
         break;
       }
       case 'reaction':
-        setReceivedMessages(prev => prev.map(message => {
-          if (message.id !== data.messageId) return message;
-          const reactions = { ...message.reactions };
-          let users = reactions[data.emoji] ? [...reactions[data.emoji]] : [];
-          if (data.remove) {
-            users = users.filter(u => u !== data.sender);
-          } else if (!users.includes(data.sender)) {
-            users.push(data.sender);
-          }
-          if (users.length > 0) {
-            reactions[data.emoji] = users;
-          } else {
-            delete reactions[data.emoji];
-          }
-          return { ...message, reactions };
-        }));
+        setReceivedMessages(prev => prev.map(message => (
+          message.id === data.messageId
+            ? applyReactionToMessage(message, data.emoji, data.sender, data.remove === true)
+            : message
+        )));
         break;
       case 'edit':
         // Only apply if the editor is the original sender — the server
@@ -164,32 +175,31 @@ function useChatMessages(
     }
   }, [socketRef]);
 
+  const sendReactionEvent = useCallback((messageId: string, emoji: string, remove: boolean) => {
+    socketRef.current?.send(JSON.stringify({ type: 'reaction', messageId, emoji, remove }));
+    setReceivedMessages(prev => prev.map(message => (
+      message.id === messageId ? applyReactionToMessage(message, emoji, displayName, remove) : message
+    )));
+  }, [socketRef, displayName]);
+
   const sendReaction = useCallback((messageId: string, emoji: string) => {
     if (socketRef.current?.readyState !== WebSocket.OPEN || !currentUserRef.current) return;
 
-    const alreadyReacted = receivedMessages.some(
-      message => message.id === messageId && message.reactions?.[emoji]?.includes(displayName),
+    const message = receivedMessages.find(m => m.id === messageId);
+    const existingEmoji = Object.keys(message?.reactions ?? {}).find(
+      e => message?.reactions?.[e]?.includes(displayName),
     );
-    const remove = alreadyReacted;
 
-    socketRef.current.send(JSON.stringify({ type: 'reaction', messageId, emoji, remove }));
-    setReceivedMessages(prev => prev.map(message => {
-      if (message.id !== messageId) return message;
-      const reactions = { ...message.reactions };
-      let users = reactions[emoji] ? [...reactions[emoji]] : [];
-      if (remove) {
-        users = users.filter(u => u !== displayName);
-      } else if (!users.includes(displayName)) {
-        users.push(displayName);
-      }
-      if (users.length > 0) {
-        reactions[emoji] = users;
-      } else {
-        delete reactions[emoji];
-      }
-      return { ...message, reactions };
-    }));
-  }, [socketRef, currentUserRef, displayName, receivedMessages]);
+    if (existingEmoji === emoji) {
+      // Same emoji clicked again — toggle it off.
+      sendReactionEvent(messageId, emoji, true);
+      return;
+    }
+
+    // A user can only have one reaction per message — clear any previous one first.
+    if (existingEmoji) sendReactionEvent(messageId, existingEmoji, true);
+    sendReactionEvent(messageId, emoji, false);
+  }, [socketRef, currentUserRef, displayName, receivedMessages, sendReactionEvent]);
 
   const sendEditMessage = useCallback((messageId: string, content: string) => {
     if (socketRef.current?.readyState !== WebSocket.OPEN) return;

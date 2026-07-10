@@ -23,7 +23,7 @@ export default function ReactionPicker({ align, onSelect, onClose }: Readonly<Re
   return (
     <div
       ref={ref}
-      className={`absolute bottom-full mb-1 flex items-center gap-1 bg-white rounded-full shadow-lg border border-gray-100 px-2 py-1.5 z-10 ${
+      className={`absolute bottom-full mb-1 flex items-center gap-1 bg-white rounded-full shadow-lg border border-gray-100 px-2 py-1.5 z-30 ${
         align === 'right' ? 'right-0' : 'left-0'
       }`}
     >

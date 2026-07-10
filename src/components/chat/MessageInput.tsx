@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { SendHorizontal, Smile, Mic, Square, ImagePlus, X, Reply, Pencil } from 'lucide-react';
+import { SendHorizontal, Smile, Mic, Square, ImagePlus, X, Reply, Pencil, Pause, Play } from 'lucide-react';
 import { fileToResizedBase64, blobToBase64 } from '@/lib/chat/media';
 import useVoiceRecorder from '@/hooks/useVoiceRecorder';
 import { ChatMessage } from '@/types';
+import { renderRichText } from '@/lib/chat/richText';
 import EmojiPicker from './EmojiPicker';
 import MentionAutocomplete from './MentionAutocomplete';
+
+const FORMATTING_HINT_REGEX = /\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|`[^`\n]+`/;
 
 const TYPING_IDLE_MS = 3000;
 
@@ -74,7 +77,16 @@ export default function MessageInput({
     onSendVoice(dataUrl, 'audio/webm;codecs=opus', durationSec);
   }, [onSendVoice]);
 
-  const { isRecording, elapsedSec, start: startRecording, stop: stopRecording, cancel: cancelRecording } = useVoiceRecorder(handleVoiceStop);
+  const {
+    isRecording,
+    isPaused,
+    elapsedSec,
+    start: startRecording,
+    stop: stopRecording,
+    cancel: cancelRecording,
+    pause: pauseRecording,
+    resume: resumeRecording,
+  } = useVoiceRecorder(handleVoiceStop);
 
   const updateMentionQuery = (value: string, cursorPos: number) => {
     const beforeCursor = value.slice(0, cursorPos);
@@ -182,6 +194,13 @@ export default function MessageInput({
         </div>
       )}
 
+      {!editingMessage && FORMATTING_HINT_REGEX.test(messageInput) && (
+        <div className="bg-white rounded-2xl px-3 py-2 mb-2 shadow-sm border border-gray-100">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Preview</p>
+          <p className="text-sm text-gray-700 break-words">{renderRichText(messageInput, null, mentionCandidates)}</p>
+        </div>
+      )}
+
       {showEmojiPicker && <EmojiPicker onSelect={handleEmojiSelect} onClose={() => setShowEmojiPicker(false)} />}
       {mentionQuery !== null && (
         <MentionAutocomplete candidates={mentionCandidates} query={mentionQuery} onSelect={handleMentionSelect} />
@@ -191,11 +210,17 @@ export default function MessageInput({
         {isRecording ? (
           <>
             <div className="flex items-center gap-2 flex-grow text-sm text-gray-600">
-              <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-              Recording... {formattedElapsed}
+              <span className={`h-2 w-2 rounded-full bg-red-500 ${isPaused ? '' : 'animate-pulse'}`} />
+              {isPaused ? 'Paused' : 'Recording...'} {formattedElapsed}
             </div>
             <button onClick={cancelRecording} className="p-2 rounded-xl text-gray-400 hover:bg-gray-100 transition-colors flex-shrink-0">
               <X className="h-4 w-4" />
+            </button>
+            <button
+              onClick={isPaused ? resumeRecording : pauseRecording}
+              className="p-2 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
+            >
+              {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
             </button>
             <button onClick={stopRecording} className="p-2 rounded-xl bg-brand text-white hover:bg-brand/80 transition-colors flex-shrink-0">
               <Square className="h-4 w-4" />

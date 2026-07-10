@@ -71,7 +71,7 @@ export default function Home() {
 
   if (!currentUser || connectionState !== 'connected') {
     return (
-      <div className='relative flex flex-col min-h-dvh bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
+      <div className='relative flex flex-col h-dvh overflow-hidden bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
         <MovingCloudsBackground />
         <LoadingScreen
           message={currentUser ? 'Reconnecting to server...' : 'Connecting to server...'}
@@ -81,14 +81,15 @@ export default function Home() {
   }
 
   const otherConnectedUsers = connectedUsers.filter(u => u.id !== currentUser.id);
+  const mentionCandidates = otherConnectedUsers.map(u => u.username).filter((name): name is string => !!name);
 
   return (
-    <div className='relative flex flex-col min-h-dvh bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
+    <div className='relative flex flex-col h-dvh overflow-hidden bg-gradient-to-bl from-sky-700 via-sky-500 to-sky-300'>
       <MovingCloudsBackground />
-      <div className='relative z-10 flex flex-col min-h-dvh bg-white/10 backdrop-blur-[2px]'>
+      <div className='relative z-10 flex flex-col h-dvh overflow-hidden bg-white/10 backdrop-blur-[2px]'>
         <Navbar userName={getDisplayName(user)} />
 
-        <div className='flex flex-col flex-grow pt-16'>
+        <div className='flex flex-col flex-grow min-h-0 pt-16'>
           {otherConnectedUsers.length === 0 ? (
             <div className='flex flex-grow items-center justify-center'>
               <motion.div
@@ -131,6 +132,7 @@ export default function Home() {
                   messagesEndRef={messagesEndRef}
                   currentUser={currentUser}
                   typingUsers={typingUsers}
+                  mentionCandidates={mentionCandidates}
                   onReact={sendReaction}
                   onReply={handleReply}
                   onEdit={handleEdit}
@@ -141,7 +143,7 @@ export default function Home() {
                   onSendImage={sendImageMessage}
                   onSendVoice={sendVoiceMessage}
                   onTyping={sendTyping}
-                  mentionCandidates={otherConnectedUsers.map(u => u.username).filter((name): name is string => !!name)}
+                  mentionCandidates={mentionCandidates}
                   replyingTo={replyingTo}
                   onCancelReply={() => setReplyingTo(null)}
                   editingMessage={editingMessage}
